@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Mail, Lock, Ticket, ArrowRight } from 'lucide-react';
+import { X, Mail, Lock, Ticket, ArrowRight, Chrome } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { signInWithPopup, auth, googleProvider } from '../firebase';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -16,6 +17,21 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   const [password, setPassword] = React.useState('');
   const [inviteCode, setInviteCode] = React.useState('');
   const [error, setError] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      await signInWithPopup(auth, googleProvider);
+      onClose();
+    } catch (err: any) {
+      console.error('Google login error:', err);
+      setError('FAILED TO SIGN IN WITH GOOGLE. PLEASE TRY AGAIN.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,9 +42,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
       return;
     }
 
-    // Mock auth logic for now
-    console.log('Auth attempt:', { mode, email, password, inviteCode });
-    onClose();
+    // Mock auth logic for email/password for now
+    setError('EMAIL SIGN-IN IS CURRENTLY DISABLED. PLEASE USE GOOGLE.');
   };
 
   return (
@@ -122,10 +137,30 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
 
                 <button
                   type="submit"
-                  className="w-full bg-manus-white text-manus-dark hover:bg-manus-orange hover:text-manus-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-2 group"
+                  disabled={loading}
+                  className="w-full bg-manus-white text-manus-dark hover:bg-manus-orange hover:text-manus-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
                 >
                   {mode === 'login' ? 'SIGN IN' : 'REQUEST ACCESS'}
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+
+                <div className="relative py-4">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-manus-white/5"></div>
+                  </div>
+                  <div className="relative flex justify-center text-[8px] font-black uppercase tracking-widest">
+                    <span className="bg-manus-dark px-4 text-manus-white/20">OR CONTINUE WITH</span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={loading}
+                  className="w-full bg-manus-white/5 border border-manus-white/10 hover:bg-manus-white/10 text-manus-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                >
+                  <Chrome className="w-4 h-4" />
+                  GOOGLE ACCOUNT
                 </button>
               </form>
 

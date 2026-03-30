@@ -9,12 +9,14 @@ export type ProjectFolder = {
   id: string;
   title: string;
   description: string;
-  artistId: string;
-  artistName: string;
-  artistAvatar: string;
-  files: ProjectFile[];
+  authorUid: string;
+  authorName: string;
+  authorPhoto: string;
+  imageUrl: string;
+  category: string;
   tags: string[];
-  createdAt: string;
+  likesCount: number;
+  createdAt: any; // Firestore Timestamp
   hasManicule?: boolean;
 };
 

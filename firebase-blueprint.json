@@ -1,0 +1,61 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Information about an artist or user.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID of the user." },
+        "displayName": { "type": "string", "description": "The name of the artist." },
+        "email": { "type": "string", "format": "email", "description": "The email address of the user." },
+        "photoURL": { "type": "string", "format": "uri", "description": "The URL of the user's profile picture." },
+        "bio": { "type": "string", "description": "A short biography of the artist." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the user was created." }
+      },
+      "required": ["uid", "displayName", "email", "createdAt"]
+    },
+    "Project": {
+      "title": "Art Project",
+      "description": "An art project uploaded by a user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique ID of the project." },
+        "title": { "type": "string", "description": "The title of the art project." },
+        "description": { "type": "string", "description": "A description of the project." },
+        "imageUrl": { "type": "string", "format": "uri", "description": "The URL of the project's image." },
+        "category": { "type": "string", "description": "The category of the project (e.g., 3D, Illustration)." },
+        "authorUid": { "type": "string", "description": "The UID of the artist who created the project." },
+        "authorName": { "type": "string", "description": "The name of the artist." },
+        "authorPhoto": { "type": "string", "format": "uri", "description": "The photo of the artist." },
+        "likesCount": { "type": "integer", "description": "The number of likes the project has received." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the project was uploaded." }
+      },
+      "required": ["id", "title", "imageUrl", "category", "authorUid", "createdAt"]
+    },
+    "Like": {
+      "title": "Project Like",
+      "description": "A like interaction between a user and a project.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the user who liked the project." },
+        "projectId": { "type": "string", "description": "The ID of the project that was liked." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the like occurred." }
+      },
+      "required": ["userId", "projectId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles stored by their UID."
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Art projects uploaded by users."
+    },
+    "/likes/{likeId}": {
+      "schema": "Like",
+      "description": "Likes on projects, ID is usually userId_projectId."
+    }
+  }
+}

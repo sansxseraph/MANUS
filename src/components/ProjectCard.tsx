@@ -20,7 +20,7 @@ export const Tag: React.FC<{ label: string; className?: string }> = ({ label, cl
 );
 
 export const ProjectCard: React.FC<ProjectCardProps> = ({ project, className }) => {
-  const mainImage = project.files[0]?.url || 'https://picsum.photos/seed/placeholder/800/600';
+  const mainImage = project.imageUrl || 'https://picsum.photos/seed/placeholder/800/600';
 
   return (
     <motion.div
@@ -61,17 +61,17 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({ project, className }) 
                 {project.title}
               </h3>
             </Link>
-            <Link to={`/artist/${project.artistId}`} className="block mt-1">
+            <Link to={`/artist/${project.authorUid}`} className="block mt-1">
               <span className="text-[9px] font-mono font-bold text-manus-cyan uppercase tracking-widest hover:text-manus-white transition-colors">
-                @{project.artistName.split(' ')[0].toUpperCase()}
+                @{project.authorName.split(' ')[0].toUpperCase()}
               </span>
             </Link>
           </div>
-          <Link to={`/artist/${project.artistId}`} className="shrink-0">
+          <Link to={`/artist/${project.authorUid}`} className="shrink-0">
             <div className="p-0.5 border border-manus-white/10 rounded-lg group-hover:border-manus-orange transition-all">
               <img
-                src={project.artistAvatar}
-                alt={project.artistName}
+                src={project.authorPhoto || `https://api.dicebear.com/7.x/avataaars/svg?seed=${project.authorUid}`}
+                alt={project.authorName}
                 className="w-8 h-8 rounded-md object-cover grayscale group-hover:grayscale-0 transition-all"
                 referrerPolicy="no-referrer"
               />

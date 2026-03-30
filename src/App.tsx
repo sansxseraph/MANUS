@@ -6,22 +6,24 @@ import { Home } from './components/Home';
 import { Artists } from './components/Artists';
 import { ArtistProfile } from './components/ArtistProfile';
 import { ProjectView } from './components/ProjectView';
+import { AuthProvider } from './context/AuthContext';
 
 export default function App() {
   return (
-    <Router>
-      <div className="min-h-screen bg-manus-dark text-manus-white selection:bg-manus-orange selection:text-manus-white">
-        <Navbar />
-        <main>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/explore" element={<Home />} />
-            <Route path="/artists" element={<Artists />} />
-            <Route path="/artist/:artistId" element={<ArtistProfile />} />
-            <Route path="/project/:projectId" element={<ProjectView />} />
-            <Route path="/profile" element={<ArtistProfile />} />
-          </Routes>
-        </main>
+    <AuthProvider>
+      <Router>
+        <div className="min-h-screen bg-manus-dark text-manus-white selection:bg-manus-orange selection:text-manus-white">
+          <Navbar />
+          <main>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/explore" element={<Home />} />
+              <Route path="/artists" element={<Artists />} />
+              <Route path="/artist/:artistId" element={<ArtistProfile />} />
+              <Route path="/project/:projectId" element={<ProjectView />} />
+              <Route path="/profile" element={<ArtistProfile />} />
+            </Routes>
+          </main>
 
         <footer className="bg-manus-dark border-t border-manus-white/10 py-20 px-6">
           <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-12">
@@ -82,5 +84,6 @@ export default function App() {
         </footer>
       </div>
     </Router>
+    </AuthProvider>
   );
 }

@@ -3,19 +3,51 @@ import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { MOCK_PROJECTS, CURATED_TAGS, MOCK_ARTISTS } from '../constants';
 import { ProjectCard, Tag } from './ProjectCard';
-import { Search, Filter, TrendingUp, Clock, Star } from 'lucide-react';
+import { Search, Filter, TrendingUp, Clock, Star, Loader2 } from 'lucide-react';
 import { ManiculeBadge } from './ManiculeBadge';
 import { cn } from '../lib/utils';
+import { db, collection, onSnapshot, query, orderBy, limit } from '../firebase';
+import { ProjectFolder } from '../types';
 
 export const Home: React.FC = () => {
   const [searchQuery, setSearchQuery] = React.useState('');
   const [activeTag, setActiveTag] = React.useState<string | null>(null);
+  const [projects, setProjects] = React.useState<ProjectFolder[]>([]);
+  const [artists, setArtists] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
 
-  const filteredProjects = MOCK_PROJECTS.filter(project => {
+  React.useEffect(() => {
+    const projectsQuery = query(collection(db, 'projects'), orderBy('createdAt', 'desc'), limit(50));
+    const artistsQuery = query(collection(db, 'users'), limit(12));
+    
+    const unsubscribeProjects = onSnapshot(projectsQuery, (snapshot) => {
+      const projectsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as ProjectFolder[];
+      setProjects(projectsData);
+    });
+
+    const unsubscribeArtists = onSnapshot(artistsQuery, (snapshot) => {
+      const artistsData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setArtists(artistsData);
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribeProjects();
+      unsubscribeArtists();
+    };
+  }, []);
+
+  const filteredProjects = projects.filter(project => {
     const matchesSearch = 
       project.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       project.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.artistName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      project.authorName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       project.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()));
     
     const matchesTag = activeTag ? project.tags.includes(activeTag) : true;
@@ -160,34 +192,43 @@ export const Home: React.FC = () => {
                 <span className="text-[9px] font-mono font-bold text-manus-white/40 uppercase tracking-widest">LIVE_FEED</span>
               </div>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {[...MOCK_PROJECTS]
-                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                .slice(0, 6)
-                .map(project => (
-                <Link
-                  key={project.id}
-                  to={`/project/${project.id}`}
-                  className="group relative aspect-square rounded-2xl overflow-hidden bg-manus-white/5 border border-manus-white/10 hover:border-manus-cyan/50 transition-all"
-                >
-                  <img
-                    src={project.files[0].url}
-                    alt={project.title}
-                    className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-700"
-                    referrerPolicy="no-referrer"
-                  />
-                  {project.hasManicule && (
-                    <div className="absolute top-2 right-2 z-10">
-                      <ManiculeBadge size="sm" />
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="w-8 h-8 text-manus-orange animate-spin" />
+              </div>
+            ) : projects.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {projects.slice(0, 6).map(project => (
+                  <Link
+                    key={project.id}
+                    to={`/project/${project.id}`}
+                    className="group relative aspect-square rounded-2xl overflow-hidden bg-manus-white/5 border border-manus-white/10 hover:border-manus-cyan/50 transition-all"
+                  >
+                    <img
+                      src={project.imageUrl}
+                      alt={project.title}
+                      className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-700"
+                      referrerPolicy="no-referrer"
+                    />
+                    {project.hasManicule && (
+                      <div className="absolute top-2 right-2 z-10">
+                        <ManiculeBadge size="sm" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-manus-dark/90 via-manus-dark/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                      <p className="text-[10px] font-display font-black text-manus-white truncate uppercase tracking-tight mb-0.5">{project.title}</p>
+                      <p className="text-[8px] font-mono font-bold text-manus-cyan uppercase tracking-widest">@{project.authorName.split(' ')[0].toUpperCase()}</p>
                     </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-manus-dark/90 via-manus-dark/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                    <p className="text-[10px] font-display font-black text-manus-white truncate uppercase tracking-tight mb-0.5">{project.title}</p>
-                    <p className="text-[8px] font-mono font-bold text-manus-cyan uppercase tracking-widest">@{project.artistName.split(' ')[0].toUpperCase()}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="py-20 text-center border border-dashed border-manus-white/10 rounded-3xl">
+                <p className="text-manus-white/20 font-display font-black text-xl uppercase tracking-widest">
+                  NO PROJECTS YET
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -205,33 +246,43 @@ export const Home: React.FC = () => {
                 <span className="text-[9px] font-mono font-bold text-manus-white/40 uppercase tracking-widest">VERIFIED_ONLY</span>
               </div>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {[...MOCK_ARTISTS]
-                .slice(0, 6)
-                .map(artist => (
-                <Link
-                  key={artist.id}
-                  to={`/artist/${artist.id}`}
-                  className="group relative aspect-square rounded-2xl overflow-hidden bg-manus-white/5 border border-manus-white/10 hover:border-manus-cyan/50 transition-all"
-                >
-                  <img
-                    src={artist.avatar}
-                    alt={artist.name}
-                    className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-700"
-                    referrerPolicy="no-referrer"
-                  />
-                  {artist.hasManicule && (
-                    <div className="absolute top-2 right-2 z-10">
-                      <ManiculeBadge size="sm" />
+            {loading ? (
+              <div className="flex items-center justify-center py-20">
+                <Loader2 className="w-8 h-8 text-manus-cyan animate-spin" />
+              </div>
+            ) : artists.length > 0 ? (
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {artists.slice(0, 6).map(artist => (
+                  <Link
+                    key={artist.id}
+                    to={`/artist/${artist.id}`}
+                    className="group relative aspect-square rounded-2xl overflow-hidden bg-manus-white/5 border border-manus-white/10 hover:border-manus-cyan/50 transition-all"
+                  >
+                    <img
+                      src={artist.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${artist.id}`}
+                      alt={artist.displayName}
+                      className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-700"
+                      referrerPolicy="no-referrer"
+                    />
+                    {artist.role === 'admin' && (
+                      <div className="absolute top-2 right-2 z-10">
+                        <ManiculeBadge size="sm" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-manus-dark/90 via-manus-dark/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                      <p className="text-[10px] font-display font-black text-manus-white truncate uppercase tracking-tight mb-0.5">{artist.displayName}</p>
+                      <p className="text-[8px] font-mono font-bold text-manus-cyan uppercase tracking-widest">@{artist.displayName?.split(' ')[0].toUpperCase()}</p>
                     </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-manus-dark/90 via-manus-dark/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                    <p className="text-[10px] font-display font-black text-manus-white truncate uppercase tracking-tight mb-0.5">{artist.name}</p>
-                    <p className="text-[8px] font-mono font-bold text-manus-cyan uppercase tracking-widest">@{artist.username.toUpperCase()}</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="py-20 text-center border border-dashed border-manus-white/10 rounded-3xl">
+                <p className="text-manus-white/20 font-display font-black text-xl uppercase tracking-widest">
+                  NO ARTISTS YET
+                </p>
+              </div>
+            )}
           </div>
         )}
 

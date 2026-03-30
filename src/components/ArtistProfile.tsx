@@ -1,21 +1,64 @@
 import React from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { MOCK_ARTISTS, MOCK_PROJECTS } from '../constants';
 import { ProjectCard, Tag } from './ProjectCard';
-import { UserPlus, MessageCircle, Share2, Globe, Twitter, Instagram } from 'lucide-react';
+import { UserPlus, MessageCircle, Share2, Globe, Twitter, Instagram, Loader2 } from 'lucide-react';
 import { ManiculeBadge } from './ManiculeBadge';
+import { db, doc, getDoc, collection, query, where, getDocs, orderBy } from '../firebase';
+import { ProjectFolder } from '../types';
 
 export const ArtistProfile: React.FC = () => {
   const { artistId } = useParams<{ artistId: string }>();
-  const artist = MOCK_ARTISTS.find(a => a.id === artistId);
-  const artistProjects = MOCK_PROJECTS.filter(p => p.artistId === artistId);
+  const [artist, setArtist] = React.useState<any>(null);
+  const [projects, setProjects] = React.useState<ProjectFolder[]>([]);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchArtistData = async () => {
+      if (!artistId) return;
+      
+      try {
+        // Fetch artist profile
+        const artistDoc = await getDoc(doc(db, 'users', artistId));
+        if (artistDoc.exists()) {
+          setArtist({ id: artistDoc.id, ...artistDoc.data() });
+        }
+
+        // Fetch artist projects
+        const q = query(
+          collection(db, 'projects'), 
+          where('authorUid', '==', artistId),
+          orderBy('createdAt', 'desc')
+        );
+        const querySnapshot = await getDocs(q);
+        const projectsData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as ProjectFolder[];
+        setProjects(projectsData);
+      } catch (error) {
+        console.error("Error fetching artist data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchArtistData();
+  }, [artistId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-manus-dark">
+        <Loader2 className="w-12 h-12 text-manus-orange animate-spin" />
+      </div>
+    );
+  }
 
   if (!artist) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-manus-white">
-        <h1 className="text-4xl mb-4">Artist Not Found</h1>
-        <Link to="/" className="text-manus-cyan hover:underline">Return Home</Link>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-manus-white bg-manus-dark">
+        <h1 className="text-4xl mb-4 font-display font-black uppercase tracking-widest">Artist Not Found</h1>
+        <Link to="/" className="text-manus-cyan hover:underline font-bold uppercase tracking-widest text-xs">Return Home</Link>
       </div>
     );
   }
@@ -25,8 +68,8 @@ export const ArtistProfile: React.FC = () => {
       {/* Banner Area */}
       <div className="relative h-[30vh] md:h-[40vh] overflow-hidden">
         <img 
-          src={artist.bannerUrl} 
-          alt={`${artist.name} banner`}
+          src={artist.bannerUrl || `https://picsum.photos/seed/${artistId}/1920/1080?blur=10`} 
+          alt={`${artist.displayName} banner`}
           className="w-full h-full object-cover opacity-40 grayscale hover:grayscale-0 transition-all duration-1000"
           referrerPolicy="no-referrer"
         />
@@ -57,12 +100,12 @@ export const ArtistProfile: React.FC = () => {
               >
                 <div className="relative">
                   <img
-                    src={artist.avatar}
-                    alt={artist.name}
+                    src={artist.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${artistId}`}
+                    alt={artist.displayName}
                     className="w-48 h-48 rounded-2xl border-2 border-manus-cyan/50 shadow-[0_0_30px_rgba(12,177,199,0.2)]"
                     referrerPolicy="no-referrer"
                   />
-                  {artist.hasManicule && (
+                  {artist.role === 'admin' && (
                     <div className="absolute -top-3 -right-3">
                       <ManiculeBadge size="md" />
                     </div>
@@ -73,7 +116,7 @@ export const ArtistProfile: React.FC = () => {
               <div className="space-y-6">
                 <div className="grid grid-cols-3 gap-4">
                   <div className="text-center">
-                    <div className="text-xl font-mono font-black text-manus-white">{artistProjects.length}</div>
+                    <div className="text-xl font-mono font-black text-manus-white">{projects.length}</div>
                     <div className="text-[8px] font-mono text-manus-white/40 uppercase tracking-widest">WORKS</div>
                   </div>
                   <div className="text-center border-x border-manus-white/10">
@@ -110,14 +153,16 @@ export const ArtistProfile: React.FC = () => {
             <div className="mb-8">
               <div className="flex items-center gap-4 mb-4">
                 <h1 className="text-5xl md:text-6xl font-display font-black text-manus-white tracking-tighter">
-                  {artist.name}
+                  {artist.displayName}
                 </h1>
-                <div className="px-3 py-1 bg-manus-orange/10 border border-manus-orange/20 rounded-sm">
-                  <span className="text-[10px] font-mono font-bold text-manus-orange tracking-widest uppercase">VERIFIED</span>
-                </div>
+                {artist.role === 'admin' && (
+                  <div className="px-3 py-1 bg-manus-orange/10 border border-manus-orange/20 rounded-sm">
+                    <span className="text-[10px] font-mono font-bold text-manus-orange tracking-widest uppercase">VERIFIED</span>
+                  </div>
+                )}
               </div>
               <p className="text-xl text-manus-white/60 font-medium leading-relaxed max-w-3xl">
-                {artist.bio}
+                {artist.bio || "This artist hasn't added a bio yet. They're letting their work speak for itself."}
               </p>
             </div>
 
@@ -125,9 +170,11 @@ export const ArtistProfile: React.FC = () => {
               <div className="p-6 bg-manus-white/5 border border-manus-white/10 rounded-2xl">
                 <div className="text-[10px] font-mono text-manus-cyan uppercase tracking-widest mb-4">SPECIALIZATIONS</div>
                 <div className="flex flex-wrap gap-2">
-                  {artist.tags.map(tag => (
+                  {artist.tags?.map((tag: string) => (
                     <Tag key={tag} label={tag} className="text-[9px] px-3 py-1" />
-                  ))}
+                  )) || (
+                    <span className="text-[10px] font-mono text-manus-white/20 uppercase tracking-widest">NO TAGS RECORDED</span>
+                  )}
                 </div>
               </div>
               <div className="p-6 bg-manus-white/5 border border-manus-white/10 rounded-2xl">
@@ -161,16 +208,24 @@ export const ArtistProfile: React.FC = () => {
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-manus-cyan rounded-full animate-pulse" />
               <span className="text-[10px] font-mono font-bold text-manus-white/40 uppercase tracking-widest">
-                {artistProjects.length} DATA_POINTS
+                {projects.length} DATA_POINTS
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
-            {artistProjects.map(project => (
-              <ProjectCard key={project.id} project={project} />
-            ))}
-          </div>
+          {projects.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-10">
+              {projects.map(project => (
+                <ProjectCard key={project.id} project={project} />
+              ))}
+            </div>
+          ) : (
+            <div className="py-32 text-center border border-dashed border-manus-white/10 rounded-[3rem]">
+              <p className="text-manus-white/20 font-display font-black text-3xl uppercase tracking-[0.2em]">
+                NO DATA RECORDED IN ARCHIVE
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,12 +1,23 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Search, User, PlusCircle, MoreVertical, Hand, LogIn } from 'lucide-react';
+import { Search, User, PlusCircle, MoreVertical, Hand, LogIn, LogOut } from 'lucide-react';
 import { UploadModal } from './UploadModal';
 import { LoginModal } from './LoginModal';
+import { useAuth } from '../context/AuthContext';
+import { signOut, auth } from '../firebase';
 
 export const Navbar: React.FC = () => {
   const [isUploadOpen, setIsUploadOpen] = React.useState(false);
   const [isLoginOpen, setIsLoginOpen] = React.useState(false);
+  const { user } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
 
   return (
     <>
@@ -41,23 +52,41 @@ export const Navbar: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setIsUploadOpen(true)}
-              className="hidden sm:flex items-center gap-2 border border-manus-white/20 hover:bg-manus-white/10 text-manus-white px-4 py-2 rounded-full text-xs font-bold transition-all"
-            >
-              <PlusCircle className="w-4 h-4" />
-              UPLOAD
-            </button>
-            <button 
-              onClick={() => setIsLoginOpen(true)}
-              className="hidden sm:flex items-center gap-2 border border-manus-white/20 hover:bg-manus-white/10 text-manus-white px-4 py-2 rounded-full text-xs font-bold transition-all"
-            >
-              <LogIn className="w-4 h-4" />
-              LOG IN
-            </button>
-            <Link to="/profile" className="p-2 rounded-full hover:bg-manus-white/10 transition-colors">
-              <User className="w-6 h-6 text-manus-white" />
-            </Link>
+            {user ? (
+              <>
+                <button 
+                  onClick={() => setIsUploadOpen(true)}
+                  className="hidden sm:flex items-center gap-2 border border-manus-white/20 hover:bg-manus-white/10 text-manus-white px-4 py-2 rounded-full text-xs font-bold transition-all"
+                >
+                  <PlusCircle className="w-4 h-4" />
+                  UPLOAD
+                </button>
+                <Link to="/profile" className="w-8 h-8 rounded-full overflow-hidden border border-manus-white/20 hover:border-manus-orange transition-colors">
+                  {user.photoURL ? (
+                    <img src={user.photoURL} alt={user.displayName || 'User'} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-manus-orange flex items-center justify-center text-manus-white text-xs font-bold">
+                      {user.displayName?.[0] || 'U'}
+                    </div>
+                  )}
+                </Link>
+                <button 
+                  onClick={handleLogout}
+                  className="p-2 rounded-full hover:bg-manus-white/10 transition-colors text-manus-white/60 hover:text-manus-orange"
+                  title="Logout"
+                >
+                  <LogOut className="w-5 h-5" />
+                </button>
+              </>
+            ) : (
+              <button 
+                onClick={() => setIsLoginOpen(true)}
+                className="flex items-center gap-2 border border-manus-white/20 hover:bg-manus-white/10 text-manus-white px-4 py-2 rounded-full text-xs font-bold transition-all"
+              >
+                <LogIn className="w-4 h-4" />
+                LOG IN
+              </button>
+            )}
             <button className="md:hidden p-2 rounded-full hover:bg-manus-white/10 transition-colors">
               <MoreVertical className="w-6 h-6 text-manus-white" />
             </button>
