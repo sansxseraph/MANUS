@@ -1,0 +1,95 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { motion } from 'motion/react';
+import { ProjectFolder } from '../types';
+import { cn } from '../lib/utils';
+import { ManiculeBadge } from './ManiculeBadge';
+
+interface ProjectCardProps {
+  project: ProjectFolder;
+  className?: string;
+}
+
+export const Tag: React.FC<{ label: string; className?: string }> = ({ label, className }) => (
+  <span className={cn(
+    "text-[9px] font-black uppercase tracking-widest text-manus-white/60 hover:text-manus-orange transition-colors cursor-pointer",
+    className
+  )}>
+    {label}
+  </span>
+);
+
+export const ProjectCard: React.FC<ProjectCardProps> = ({ project, className }) => {
+  const mainImage = project.files[0]?.url || 'https://picsum.photos/seed/placeholder/800/600';
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -5 }}
+      className={cn(
+        "group relative bg-manus-dark border border-manus-white/10 rounded-2xl overflow-hidden shadow-2xl transition-all hover:border-manus-cyan/30",
+        className
+      )}
+    >
+      <Link to={`/project/${project.id}`} className="block aspect-[4/3] overflow-hidden relative">
+        <div className="absolute top-4 left-4 z-20">
+          <div className="px-2 py-0.5 bg-manus-dark/60 backdrop-blur-md border border-manus-white/10 rounded-sm">
+            <span className="text-[7px] font-mono text-manus-white/60 uppercase tracking-widest">REF_{project.id.slice(0, 4).toUpperCase()}</span>
+          </div>
+        </div>
+        
+        <img
+          src={mainImage}
+          alt={project.title}
+          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+          referrerPolicy="no-referrer"
+        />
+        {project.hasManicule && (
+          <div className="absolute top-4 right-4 z-10">
+            <ManiculeBadge size="sm" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-manus-dark via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      </Link>
+
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div className="flex-1 min-w-0">
+            <Link to={`/project/${project.id}`}>
+              <h3 className="text-lg font-display font-black leading-tight text-manus-white group-hover:text-manus-cyan transition-colors truncate uppercase tracking-tight">
+                {project.title}
+              </h3>
+            </Link>
+            <Link to={`/artist/${project.artistId}`} className="block mt-1">
+              <span className="text-[9px] font-mono font-bold text-manus-cyan uppercase tracking-widest hover:text-manus-white transition-colors">
+                @{project.artistName.split(' ')[0].toUpperCase()}
+              </span>
+            </Link>
+          </div>
+          <Link to={`/artist/${project.artistId}`} className="shrink-0">
+            <div className="p-0.5 border border-manus-white/10 rounded-lg group-hover:border-manus-orange transition-all">
+              <img
+                src={project.artistAvatar}
+                alt={project.artistName}
+                className="w-8 h-8 rounded-md object-cover grayscale group-hover:grayscale-0 transition-all"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </Link>
+        </div>
+
+        <div className="flex flex-wrap gap-1.5">
+          {project.tags.slice(0, 2).map(tag => (
+            <Tag key={tag} label={tag} className="text-[8px] font-mono opacity-40 group-hover:opacity-100" />
+          ))}
+          {project.tags.length > 2 && (
+            <span className="text-[8px] font-mono font-bold text-manus-white/20 ml-1">
+              +{project.tags.length - 2}
+            </span>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
