@@ -18,15 +18,18 @@ export type ProjectFolder = {
   likesCount: number;
   createdAt: any; // Firestore Timestamp
   hasManicule?: boolean;
+  isFeatured?: boolean;
 };
 
 export type Artist = {
   id: string;
   name: string;
   username: string;
+  handle?: string;
   avatar: string;
   bio: string;
   bannerUrl?: string;
   tags: string[];
   hasManicule?: boolean;
+  avatarShape?: 'square' | 'circle';
 };

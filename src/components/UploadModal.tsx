@@ -4,7 +4,7 @@ import { X, Upload, Plus, Trash2, Image as ImageIcon, Film, Loader2 } from 'luci
 import { CURATED_TAGS } from '../constants';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
-import { db, collection, addDoc, serverTimestamp, handleFirestoreError, OperationType, storage, ref, uploadBytes, getDownloadURL, setDoc, doc } from '../firebase';
+import { db, collection, addDoc, serverTimestamp, handleFirestoreError, OperationType, storage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, setDoc, doc } from '../firebase';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -73,18 +73,76 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
     setUploadProgress(0);
 
     try {
+      console.log('Starting publish process...', { title, fileCount: files.length, userId: user.uid });
+      
       // 1. Upload files to Firebase Storage
-      const uploadedUrls = await Promise.all(
-        files.map(async (fileData, index) => {
+      const uploadedUrls = [];
+      for (let i = 0; i < files.length; i++) {
+        const fileData = files[i];
+        
+        // Check file size (limit to 10MB for safety in this environment)
+        if (fileData.file.size > 10 * 1024 * 1024) {
+          throw new Error(`FILE ${fileData.name.toUpperCase()} IS TOO LARGE (MAX 10MB).`);
+        }
+
+        try {
+          console.log(`Uploading file ${i + 1}/${files.length}: ${fileData.name} (${fileData.file.size} bytes)`);
           const storageRef = ref(storage, `projects/${user.uid}/${Date.now()}_${fileData.name}`);
-          const snapshot = await uploadBytes(storageRef, fileData.file);
-          const url = await getDownloadURL(snapshot.ref);
-          setUploadProgress(((index + 1) / files.length) * 100);
-          return url;
-        })
-      );
+          
+          // Use uploadBytesResumable to track progress and handle hangs
+          console.log(`Creating upload task for ${fileData.name}...`);
+          const uploadTask = uploadBytesResumable(storageRef, fileData.file);
+          console.log(`Upload task created for ${fileData.name}.`);
+          
+          const uploadPromise = new Promise<string>((resolve, reject) => {
+            console.log(`Setting up listeners for ${fileData.name}...`);
+            uploadTask.on('state_changed', 
+              (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                console.log(`Upload ${i + 1} (${fileData.name}) is ${progress.toFixed(2)}% done. State: ${snapshot.state}`);
+                // Update progress for the current file
+                const overallProgress = ((i + (progress / 100)) / files.length) * 100;
+                setUploadProgress(overallProgress);
+              }, 
+              (error) => {
+                console.error(`Upload task error for ${fileData.name}:`, error);
+                reject(error);
+              }, 
+              async () => {
+                console.log(`Upload task completed for ${fileData.name}. Getting download URL...`);
+                try {
+                  const url = await getDownloadURL(uploadTask.snapshot.ref);
+                  console.log(`Download URL retrieved for ${fileData.name}:`, url);
+                  resolve(url);
+                } catch (urlErr) {
+                  console.error(`Error getting download URL for ${fileData.name}:`, urlErr);
+                  reject(urlErr);
+                }
+              }
+            );
+          });
+
+          const timeoutPromise = new Promise<string>((_, reject) => 
+            setTimeout(() => {
+              uploadTask.cancel();
+              reject(new Error("UPLOAD TIMEOUT: THE CONNECTION TO FIREBASE STORAGE IS TAKING TOO LONG. PLEASE TRY A SMALLER FILE OR CHECK YOUR CONNECTION."));
+            }, 60000) // Increased to 60s
+          );
+
+          const url = await Promise.race([uploadPromise, timeoutPromise]);
+          console.log(`File ${i + 1} uploaded successfully:`, url);
+          uploadedUrls.push(url);
+        } catch (uploadErr) {
+          console.error(`Error uploading file ${fileData.name}:`, uploadErr);
+          if (uploadErr instanceof Error && uploadErr.message.includes("TIMEOUT")) {
+            throw uploadErr;
+          }
+          throw new Error(`FAILED TO UPLOAD ${fileData.name.toUpperCase()}. ${uploadErr instanceof Error ? uploadErr.message : ''}`);
+        }
+      }
 
       // 2. Save project metadata to Firestore
+      console.log('Files uploaded, saving metadata to Firestore...');
       const projectId = doc(collection(db, 'projects')).id;
       const projectData = {
         id: projectId,
@@ -95,13 +153,20 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
         tags: selectedTags,
         authorUid: user.uid,
         authorName: user.displayName || 'Anonymous Artist',
-        authorPhoto: user.photoURL || '',
+        authorPhoto: user.photoURL || null,
         likesCount: 0,
+        isFeatured: false,
         createdAt: serverTimestamp(),
       };
 
-      await setDoc(doc(db, 'projects', projectId), projectData);
-      console.log('Project published with ID:', projectId);
+      console.log('Writing project document to Firestore...', projectId);
+      const firestorePromise = setDoc(doc(db, 'projects', projectId), projectData);
+      const firestoreTimeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("FIRESTORE TIMEOUT: THE CONNECTION TO FIRESTORE IS TAKING TOO LONG.")), 15000)
+      );
+
+      await Promise.race([firestorePromise, firestoreTimeout]);
+      console.log('Project published successfully with ID:', projectId);
       
       // Cleanup previews
       files.forEach(f => URL.revokeObjectURL(f.previewUrl));
@@ -113,8 +178,17 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
       setSelectedTags([]);
       setFiles([]);
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'projects');
-      setError('FAILED TO PUBLISH PROJECT. PLEASE TRY AGAIN.');
+      console.error("Publish error:", err);
+      if (err instanceof Error) {
+        const message = err.message;
+        if (message.includes('permission-denied') || message.includes('Missing or insufficient permissions')) {
+          setError('PERMISSION DENIED. PLEASE ENSURE YOU ARE LOGGED IN CORRECTLY AND HAVE PERMISSION TO UPLOAD.');
+        } else {
+          setError(message.toUpperCase());
+        }
+      } else {
+        setError('AN UNEXPECTED ERROR OCCURRED. PLEASE TRY AGAIN.');
+      }
     } finally {
       setLoading(false);
     }
@@ -157,7 +231,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                 {/* Left Column: Details */}
                 <div className="space-y-8">
                   <div>
-                    <label className="block text-[10px] font-black text-manus-white/40 uppercase tracking-[0.2em] mb-3">
+                    <label className="block text-xs font-black text-manus-white/40 uppercase tracking-[0.2em] mb-3">
                       PROJECT TITLE
                     </label>
                     <input
@@ -170,7 +244,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black text-manus-white/40 uppercase tracking-[0.2em] mb-3">
+                    <label className="block text-xs font-black text-manus-white/40 uppercase tracking-[0.2em] mb-3">
                       DESCRIPTION
                     </label>
                     <textarea
@@ -183,14 +257,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                   </div>
 
                   <div>
-                    <label className="block text-[10px] font-black text-manus-white/40 uppercase tracking-[0.2em] mb-3">
+                    <label className="block text-xs font-black text-manus-white/40 uppercase tracking-[0.2em] mb-3">
                       TAGS (CURATED & CUSTOM)
                     </label>
                     <div className="flex flex-wrap gap-2 mb-4">
                       {selectedTags.map(tag => (
                         <span 
                           key={tag}
-                          className="flex items-center gap-2 px-3 py-1 rounded-full bg-manus-cyan text-manus-dark text-[10px] font-black uppercase tracking-wider"
+                          className="flex items-center gap-2 px-3 py-1 rounded-full bg-manus-cyan text-manus-dark text-xs font-black uppercase tracking-wider"
                         >
                           {tag}
                           <X 
@@ -208,7 +282,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                         onChange={(e) => setCustomTag(e.target.value)}
                         onKeyDown={addCustomTag}
                         placeholder="ADD CUSTOM TAG AND PRESS ENTER..."
-                        className="w-full bg-manus-white/5 border border-manus-white/10 rounded-full py-3 pl-12 pr-6 text-[10px] font-black text-manus-white placeholder:text-manus-white/20 focus:outline-none focus:border-manus-cyan transition-colors uppercase tracking-widest"
+                        className="w-full bg-manus-white/5 border border-manus-white/10 rounded-full py-3 pl-12 pr-6 text-xs font-black text-manus-white placeholder:text-manus-white/20 focus:outline-none focus:border-manus-cyan transition-colors uppercase tracking-widest"
                       />
                     </div>
                     <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 border border-manus-white/5 rounded-2xl bg-manus-white/5 no-scrollbar">
@@ -217,7 +291,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                           key={tag}
                           onClick={() => toggleTag(tag)}
                           className={cn(
-                            "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all",
+                            "px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border transition-all",
                             selectedTags.includes(tag)
                               ? "bg-manus-cyan text-manus-dark border-manus-cyan"
                               : "border-manus-white/10 text-manus-white/40 hover:border-manus-white/30 hover:text-manus-white"
@@ -233,7 +307,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                 {/* Right Column: Files */}
                 <div className="space-y-8">
                   <div>
-                    <label className="block text-[10px] font-black text-manus-white/40 uppercase tracking-[0.2em] mb-3">
+                    <label className="block text-xs font-black text-manus-white/40 uppercase tracking-[0.2em] mb-3">
                       PROJECT FILES (STILLS & VIDEO)
                     </label>
                     <div className="relative group">
@@ -282,7 +356,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
                             <span className="text-xs font-bold text-manus-white truncate max-w-[150px]">
                               {file.name}
                             </span>
-                            <span className="text-[8px] font-mono text-manus-white/20 uppercase tracking-widest">
+                            <span className="text-[10px] font-mono text-manus-white/20 uppercase tracking-widest">
                               {(file.file.size / (1024 * 1024)).toFixed(2)} MB
                             </span>
                           </div>

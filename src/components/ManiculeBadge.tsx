@@ -44,8 +44,8 @@ export const ManiculeBadge: React.FC<ManiculeBadgeProps> = ({
       </motion.div>
       {showLabel && (
         <div className="flex flex-col">
-          <span className="text-[10px] font-black text-manus-orange uppercase tracking-[0.2em] leading-none">MANICULE</span>
-          <span className="text-[8px] font-black text-manus-white/40 uppercase tracking-[0.1em]">ETHICAL CREATOR</span>
+          <span className="text-xs font-black text-manus-orange uppercase tracking-[0.2em] leading-none">MANICULE</span>
+          <span className="text-[10px] font-black text-manus-white/40 uppercase tracking-[0.1em]">ETHICAL CREATOR</span>
         </div>
       )}
     </div>

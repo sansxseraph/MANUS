@@ -1,18 +1,48 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { MOCK_ARTISTS } from '../constants';
 import { ManiculeBadge } from './ManiculeBadge';
-import { Search, Filter, UserPlus } from 'lucide-react';
+import { Search, Filter, UserPlus, Loader2 } from 'lucide-react';
+import { db, collection, getDocs, query, limit } from '../firebase';
 
 export const Artists: React.FC = () => {
   const [searchQuery, setSearchQuery] = React.useState('');
+  const [artists, setArtists] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(true);
 
-  const filteredArtists = MOCK_ARTISTS.filter(artist => 
-    artist.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    artist.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    artist.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
+  React.useEffect(() => {
+    const fetchArtists = async () => {
+      try {
+        const q = query(collection(db, 'profiles'), limit(50));
+        const querySnapshot = await getDocs(q);
+        const artistsData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setArtists(artistsData);
+      } catch (error) {
+        console.error("Error fetching artists:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchArtists();
+  }, []);
+
+  const filteredArtists = artists.filter(artist => 
+    (artist.displayName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (artist.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (artist.tags || []).some((t: string) => t.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-manus-dark">
+        <Loader2 className="w-12 h-12 text-manus-orange animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-manus-dark pb-32">
@@ -21,7 +51,7 @@ export const Artists: React.FC = () => {
           <div>
             <div className="flex items-center gap-3 mb-2">
               <div className="w-2 h-2 rounded-full bg-manus-cyan animate-pulse" />
-              <span className="text-[10px] font-mono text-manus-cyan uppercase tracking-[0.3em]">DIRECTORY_ACTIVE</span>
+              <span className="text-xs font-mono text-manus-cyan uppercase tracking-[0.3em]">DIRECTORY_ACTIVE</span>
             </div>
             <h1 className="text-6xl md:text-8xl font-display font-black text-manus-white mb-4 uppercase tracking-tighter">
               ARTISTS
@@ -39,7 +69,7 @@ export const Artists: React.FC = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="SEARCH_CREATORS..."
-                className="w-full bg-manus-white/5 border border-manus-white/10 rounded-xl py-5 pl-14 pr-6 text-[10px] font-mono font-bold text-manus-white placeholder:text-manus-white/20 focus:outline-none focus:border-manus-cyan/50 focus:bg-manus-white/10 transition-all uppercase tracking-widest"
+                className="w-full bg-manus-white/5 border border-manus-white/10 rounded-xl py-5 pl-14 pr-6 text-xs font-mono font-bold text-manus-white placeholder:text-manus-white/20 focus:outline-none focus:border-manus-cyan/50 focus:bg-manus-white/10 transition-all uppercase tracking-widest"
               />
             </div>
             <button className="p-5 rounded-xl bg-manus-white/5 border border-manus-white/10 hover:bg-manus-white/10 transition-colors">
@@ -59,19 +89,19 @@ export const Artists: React.FC = () => {
             >
               {/* Technical Overlay */}
               <div className="absolute top-0 right-0 p-4 pointer-events-none">
-                <span className="text-[8px] font-mono text-manus-white/10 uppercase tracking-widest">REF_0{index + 1}</span>
+                <span className="text-[10px] font-mono text-manus-white/10 uppercase tracking-widest">REF_0{index + 1}</span>
               </div>
 
               <div className="flex flex-col sm:flex-row items-start gap-8 relative z-10">
                 <Link to={`/artist/${artist.id}`} className="shrink-0 relative">
                   <div className="relative p-1 border border-manus-white/10 rounded-2xl group-hover:border-manus-cyan/50 transition-colors">
                     <img
-                      src={artist.avatar}
-                      alt={artist.name}
+                      src={artist.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${artist.id}`}
+                      alt={artist.displayName}
                       className="w-28 h-28 rounded-xl object-cover grayscale group-hover:grayscale-0 transition-all duration-500"
                       referrerPolicy="no-referrer"
                     />
-                    {artist.hasManicule && (
+                    {artist.role === 'admin' && (
                       <div className="absolute -top-2 -right-2">
                         <ManiculeBadge size="sm" />
                       </div>
@@ -83,38 +113,40 @@ export const Artists: React.FC = () => {
                   <div className="flex items-center gap-3 mb-1">
                     <Link to={`/artist/${artist.id}`}>
                       <h3 className="text-3xl font-display font-black text-manus-white group-hover:text-manus-cyan transition-colors uppercase tracking-tight truncate">
-                        {artist.name}
+                        {artist.displayName}
                       </h3>
                     </Link>
                   </div>
-                  <p className="text-manus-cyan text-[10px] font-mono font-bold uppercase tracking-widest mb-4">
-                    @{artist.username}
+                  <p className="text-manus-cyan text-xs font-mono font-bold uppercase tracking-widest mb-4">
+                    @{artist.handle?.replace(/^@/, '') || artist.displayName?.split(' ')[0].toUpperCase()}
                   </p>
                   
                   <div className="grid grid-cols-3 gap-4 mb-6">
                     <div>
-                      <div className="text-[8px] font-mono text-manus-white/20 uppercase tracking-widest mb-1">WORKS</div>
-                      <div className="text-sm font-mono font-black text-manus-white/80">124</div>
+                      <div className="text-[10px] font-mono text-manus-white/20 uppercase tracking-widest mb-1">WORKS</div>
+                      <div className="text-sm font-mono font-black text-manus-white/80">12</div>
                     </div>
                     <div>
-                      <div className="text-[8px] font-mono text-manus-white/20 uppercase tracking-widest mb-1">FOLLOWS</div>
-                      <div className="text-sm font-mono font-black text-manus-white/80">8.2K</div>
+                      <div className="text-[10px] font-mono text-manus-white/20 uppercase tracking-widest mb-1">FOLLOWS</div>
+                      <div className="text-sm font-mono font-black text-manus-white/80">{artist.followersCount || 0}</div>
                     </div>
                     <div>
-                      <div className="text-[8px] font-mono text-manus-white/20 uppercase tracking-widest mb-1">STATUS</div>
+                      <div className="text-[10px] font-mono text-manus-white/20 uppercase tracking-widest mb-1">STATUS</div>
                       <div className="flex items-center gap-1.5">
                         <div className="w-1.5 h-1.5 rounded-full bg-manus-cyan shadow-[0_0_8px_rgba(0,255,255,0.5)]" />
-                        <span className="text-[9px] font-mono font-bold text-manus-cyan">LIVE</span>
+                        <span className="text-[10px] font-mono font-bold text-manus-cyan">LIVE</span>
                       </div>
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    {artist.tags.slice(0, 3).map(tag => (
-                      <span key={tag} className="text-[8px] font-mono font-bold text-manus-white/40 uppercase tracking-widest px-3 py-1 bg-manus-white/5 border border-manus-white/5 rounded-md">
+                    {artist.tags?.slice(0, 3).map((tag: string) => (
+                      <span key={tag} className="text-[10px] font-mono font-bold text-manus-white/40 uppercase tracking-widest px-3 py-1 bg-manus-white/5 border border-manus-white/5 rounded-md">
                         {tag}
                       </span>
-                    ))}
+                    )) || (
+                      <span className="text-[10px] font-mono font-bold text-manus-white/20 uppercase tracking-widest">NEW_CREATOR</span>
+                    )}
                   </div>
                 </div>
 

@@ -1,9 +1,9 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Montserrat+Alternates:wght@900&display=swap');
 
 @theme {
   --font-sans: "Montserrat", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Montserrat Alternates", sans-serif;
+  --font-hero: "Arvo", serif;
 
   --color-manus-orange: #ff4d0d;
   --color-manus-dark: #041d2b;

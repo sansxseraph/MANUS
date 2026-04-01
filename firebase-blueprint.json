@@ -9,10 +9,32 @@
         "displayName": { "type": "string", "description": "The name of the artist." },
         "email": { "type": "string", "format": "email", "description": "The email address of the user." },
         "photoURL": { "type": "string", "format": "uri", "description": "The URL of the user's profile picture." },
+        "bannerUrl": { "type": "string", "format": "uri", "description": "The URL of the user's banner image." },
         "bio": { "type": "string", "description": "A short biography of the artist." },
+        "handle": { "type": "string", "description": "The unique handle for the artist." },
+        "avatarShape": { "type": "string", "enum": ["square", "circle"], "description": "The shape of the avatar." },
+        "role": { "type": "string", "enum": ["user", "admin"], "description": "The role of the user." },
         "createdAt": { "type": "string", "format": "date-time", "description": "When the user was created." }
       },
       "required": ["uid", "displayName", "email", "createdAt"]
+    },
+    "Profile": {
+      "title": "Public Profile",
+      "description": "Publicly visible information about an artist.",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string", "description": "The name of the artist." },
+        "photoURL": { "type": "string", "format": "uri", "description": "The URL of the user's profile picture." },
+        "bannerUrl": { "type": "string", "format": "uri", "description": "The URL of the user's banner image." },
+        "bio": { "type": "string", "description": "A short biography of the artist." },
+        "handle": { "type": "string", "description": "The unique handle for the artist." },
+        "avatarShape": { "type": "string", "enum": ["square", "circle"], "description": "The shape of the avatar." },
+        "role": { "type": "string", "description": "The role of the user (e.g., user, admin)." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the user was created." },
+        "followersCount": { "type": "integer", "description": "Number of followers." },
+        "followingCount": { "type": "integer", "description": "Number of users followed." }
+      },
+      "required": ["displayName", "createdAt"]
     },
     "Project": {
       "title": "Art Project",
@@ -42,12 +64,31 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "When the like occurred." }
       },
       "required": ["userId", "projectId", "createdAt"]
+    },
+    "Follow": {
+      "title": "User Follow",
+      "description": "A follow relationship between two users.",
+      "type": "object",
+      "properties": {
+        "followerId": { "type": "string", "description": "The UID of the user who is following." },
+        "followingId": { "type": "string", "description": "The UID of the user being followed." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the follow occurred." }
+      },
+      "required": ["followerId", "followingId", "createdAt"]
     }
   },
   "firestore": {
     "/users/{uid}": {
       "schema": "User",
-      "description": "User profiles stored by their UID."
+      "description": "Private user information."
+    },
+    "/profiles/{uid}": {
+      "schema": "Profile",
+      "description": "Public user profiles."
+    },
+    "/follows/{followId}": {
+      "schema": "Follow",
+      "description": "User follow relationships, ID is usually followerId_followingId."
     },
     "/projects/{projectId}": {
       "schema": "Project",

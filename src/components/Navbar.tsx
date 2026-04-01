@@ -5,11 +5,12 @@ import { UploadModal } from './UploadModal';
 import { LoginModal } from './LoginModal';
 import { useAuth } from '../context/AuthContext';
 import { signOut, auth } from '../firebase';
+import { cn } from '../lib/utils';
 
 export const Navbar: React.FC = () => {
   const [isUploadOpen, setIsUploadOpen] = React.useState(false);
   const [isLoginOpen, setIsLoginOpen] = React.useState(false);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const handleLogout = async () => {
     try {
@@ -27,7 +28,7 @@ export const Navbar: React.FC = () => {
             <div className="w-8 h-8 flex items-center justify-center">
               <img 
                 src="/logo.svg" 
-                alt="Manus Logo" 
+                alt="MANUS Logo" 
                 className="w-full h-full object-contain"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
@@ -38,13 +39,16 @@ export const Navbar: React.FC = () => {
                 }}
               />
             </div>
-            <span className="font-display font-black text-2xl tracking-tighter text-manus-white leading-none">MANUS</span>
-            <span className="px-2 py-0.5 rounded-md bg-manus-orange/10 border border-manus-orange/20 text-[8px] font-black text-manus-orange tracking-[0.2em] ml-1">BETA</span>
+            <span className="font-display font-black text-2xl tracking-tighter text-manus-white leading-none uppercase">MANUS</span>
+            <span className="px-2 py-0.5 rounded-md bg-manus-orange/10 border border-manus-orange/20 text-[10px] font-black text-manus-orange tracking-[0.2em] ml-1">BETA</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-8">
             <Link to="/explore" className="text-sm font-medium hover:text-manus-cyan transition-colors">EXPLORE</Link>
             <Link to="/artists" className="text-sm font-medium hover:text-manus-cyan transition-colors">ARTISTS</Link>
+            {user && (
+              <Link to={`/artist/${user.uid}`} className="text-sm font-medium hover:text-manus-cyan transition-colors">PROFILE</Link>
+            )}
             <Link to="/blog" className="text-sm font-medium hover:text-manus-cyan transition-colors">BLOG</Link>
             <div className="relative group">
               <Search className="w-5 h-5 text-manus-white/60 group-hover:text-manus-cyan cursor-pointer transition-colors" />
@@ -61,12 +65,22 @@ export const Navbar: React.FC = () => {
                   <PlusCircle className="w-4 h-4" />
                   UPLOAD
                 </button>
-                <Link to="/profile" className="w-8 h-8 rounded-full overflow-hidden border border-manus-white/20 hover:border-manus-orange transition-colors">
-                  {user.photoURL ? (
-                    <img src={user.photoURL} alt={user.displayName || 'User'} className="w-full h-full object-cover" />
+                <Link 
+                  to={profile ? `/artist/${profile.id}` : `/artist/${user.uid}`} 
+                  className={cn(
+                    "w-8 h-8 overflow-hidden border border-manus-white/20 hover:border-manus-cyan transition-all",
+                    profile?.avatarShape === 'circle' ? "rounded-full" : "rounded-lg"
+                  )}
+                >
+                  {(profile?.photoURL || user.photoURL) ? (
+                    <img 
+                      src={profile?.photoURL || user.photoURL || ''} 
+                      alt={profile?.displayName || user.displayName || 'User'} 
+                      className="w-full h-full object-cover" 
+                    />
                   ) : (
-                    <div className="w-full h-full bg-manus-orange flex items-center justify-center text-manus-white text-xs font-bold">
-                      {user.displayName?.[0] || 'U'}
+                    <div className="w-full h-full bg-manus-cyan flex items-center justify-center text-manus-dark text-xs font-bold">
+                      {(profile?.displayName || user.displayName)?.[0] || 'U'}
                     </div>
                   )}
                 </Link>

@@ -94,7 +94,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="EMAIL ADDRESS"
-                      className="w-full bg-manus-white/5 border border-manus-white/10 rounded-2xl py-4 pl-14 pr-6 text-[10px] font-black text-manus-white placeholder:text-manus-white/20 focus:outline-none focus:border-manus-orange transition-colors uppercase tracking-widest"
+                      className="w-full bg-manus-white/5 border border-manus-white/10 rounded-2xl py-4 pl-14 pr-6 text-xs font-black text-manus-white placeholder:text-manus-white/20 focus:outline-none focus:border-manus-orange transition-colors uppercase tracking-widest"
                     />
                   </div>
 
@@ -106,7 +106,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="PASSWORD"
-                      className="w-full bg-manus-white/5 border border-manus-white/10 rounded-2xl py-4 pl-14 pr-6 text-[10px] font-black text-manus-white placeholder:text-manus-white/20 focus:outline-none focus:border-manus-orange transition-colors uppercase tracking-widest"
+                      className="w-full bg-manus-white/5 border border-manus-white/10 rounded-2xl py-4 pl-14 pr-6 text-xs font-black text-manus-white placeholder:text-manus-white/20 focus:outline-none focus:border-manus-orange transition-colors uppercase tracking-widest"
                     />
                   </div>
 
@@ -123,14 +123,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                         value={inviteCode}
                         onChange={(e) => setInviteCode(e.target.value)}
                         placeholder="INVITATION CODE"
-                        className="w-full bg-manus-orange/5 border border-manus-orange/20 rounded-2xl py-4 pl-14 pr-6 text-[10px] font-black text-manus-orange placeholder:text-manus-orange/40 focus:outline-none focus:border-manus-orange transition-colors uppercase tracking-widest"
+                        className="w-full bg-manus-orange/5 border border-manus-orange/20 rounded-2xl py-4 pl-14 pr-6 text-xs font-black text-manus-orange placeholder:text-manus-orange/40 focus:outline-none focus:border-manus-orange transition-colors uppercase tracking-widest"
                       />
                     </motion.div>
                   )}
                 </div>
 
                 {error && (
-                  <p className="text-[10px] font-black text-manus-orange uppercase tracking-widest text-center">
+                  <p className="text-xs font-black text-manus-orange uppercase tracking-widest text-center">
                     {error}
                   </p>
                 )}
@@ -138,7 +138,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-manus-white text-manus-dark hover:bg-manus-orange hover:text-manus-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
+                  className="w-full bg-manus-white text-manus-dark hover:bg-manus-orange hover:text-manus-white py-4 rounded-2xl text-xs font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-2 group disabled:opacity-50"
                 >
                   {mode === 'login' ? 'SIGN IN' : 'REQUEST ACCESS'}
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -148,7 +148,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-manus-white/5"></div>
                   </div>
-                  <div className="relative flex justify-center text-[8px] font-black uppercase tracking-widest">
+                  <div className="relative flex justify-center text-[10px] font-black uppercase tracking-widest">
                     <span className="bg-manus-dark px-4 text-manus-white/20">OR CONTINUE WITH</span>
                   </div>
                 </div>
@@ -157,7 +157,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                   type="button"
                   onClick={handleGoogleLogin}
                   disabled={loading}
-                  className="w-full bg-manus-white/5 border border-manus-white/10 hover:bg-manus-white/10 text-manus-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                  className="w-full bg-manus-white/5 border border-manus-white/10 hover:bg-manus-white/10 text-manus-white py-4 rounded-2xl text-xs font-black uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                 >
                   <Chrome className="w-4 h-4" />
                   GOOGLE ACCOUNT
@@ -167,7 +167,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
               <div className="mt-10 pt-8 border-t border-manus-white/5 text-center">
                 <button
                   onClick={() => setMode(mode === 'login' ? 'join' : 'login')}
-                  className="text-[10px] font-black text-manus-white/40 hover:text-manus-white uppercase tracking-widest transition-colors"
+                  className="text-xs font-black text-manus-white/40 hover:text-manus-white uppercase tracking-widest transition-colors"
                 >
                   {mode === 'login' 
                     ? "DON'T HAVE AN ACCOUNT? JOIN THE BETA" 

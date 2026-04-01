@@ -1,14 +1,17 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, query, where, orderBy, onSnapshot, serverTimestamp, Timestamp, getDocFromServer, addDoc, limit, increment } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase SDK
 const app = initializeApp(firebaseConfig);
+const rawBucket = firebaseConfig.storageBucket || `${firebaseConfig.projectId}.appspot.com`;
+const storageBucket = rawBucket.startsWith('gs://') ? rawBucket : `gs://${rawBucket}`;
+console.log('Firebase Storage Bucket:', storageBucket);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
-export const storage = getStorage(app);
+export const storage = getStorage(app, storageBucket);
 export const googleProvider = new GoogleAuthProvider();
 
 // Operation Types for Error Handling
@@ -99,6 +102,7 @@ export {
   increment,
   ref,
   uploadBytes,
+  uploadBytesResumable,
   getDownloadURL
 };
 export type { FirebaseUser };

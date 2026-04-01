@@ -13,8 +13,20 @@ service cloud.firestore {
     //   - displayName: string (required) - The name of the artist.
     //   - email: string (required, format: email) - The email address of the user.
     //   - photoURL: string (optional, format: uri) - The URL of the user's profile picture.
+    //   - bannerUrl: string (optional, format: uri) - The URL of the user's banner image.
     //   - bio: string (optional) - A short biography of the artist.
+    //   - handle: string (optional) - The unique handle for the artist.
+    //   - avatarShape: string (optional, enum: ['square', 'circle']) - The shape of the avatar.
+    //   - photoShape: string (optional, enum: ['square', 'circle']) - The shape of the gallery photo.
+    //   - role: string (required, enum: ['user', 'admin']) - The role of the user.
     //   - createdAt: timestamp (required, immutable) - When the user was created.
+    //   - twitterUrl: string (optional)
+    //   - instagramUrl: string (optional)
+    //   - githubUrl: string (optional)
+    //   - discordUrl: string (optional)
+    //   - tumblrUrl: string (optional)
+    //   - blueskyUrl: string (optional)
+    //   - websiteUrl: string (optional)
     //
     // Collection: projects
     // Document ID: {projectId}
@@ -53,8 +65,10 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
-          (request.auth.token.email == "rrbeardsley@gmail.com" && request.auth.token.email_verified == true));
+        (
+          (request.auth.token.email == "rrbeardsley@gmail.com" && request.auth.token.email_verified == true) ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        );
     }
 
     function hasRequiredFields(fields) {
@@ -78,29 +92,69 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidUser(data) {
-      return hasRequiredFields(['uid', 'displayName', 'email', 'createdAt']) &&
-             hasOnlyAllowedFields(['uid', 'displayName', 'email', 'photoURL', 'bio', 'createdAt', 'role']) &&
+      return hasRequiredFields(['uid', 'displayName', 'email']) &&
+             hasOnlyAllowedFields(['uid', 'displayName', 'email', 'photoURL', 'bannerUrl', 'bio', 'createdAt', 'role', 'avatarShape', 'photoShape', 'handle', 'twitterUrl', 'instagramUrl', 'githubUrl', 'discordUrl', 'tumblrUrl', 'blueskyUrl', 'websiteUrl', 'tags']) &&
              data.uid is string && data.uid.size() > 0 &&
              data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
              isValidEmail(data.email) &&
-             (data.photoURL == null || isValidUrl(data.photoURL)) &&
-             (data.bio == null || (data.bio is string && data.bio.size() < 1000)) &&
-             data.createdAt is timestamp;
+             (data.photoURL == null || data.photoURL == "" || isValidUrl(data.photoURL)) &&
+             (data.bannerUrl == null || data.bannerUrl == "" || isValidUrl(data.bannerUrl)) &&
+             (data.bio == null || (data.bio is string && data.bio.size() < 2000)) &&
+             (data.avatarShape == null || data.avatarShape in ['square', 'circle']) &&
+             (data.photoShape == null || data.photoShape in ['square', 'circle']) &&
+             (data.handle == null || (data.handle is string && data.handle.size() < 100)) &&
+             (data.twitterUrl == null || data.twitterUrl is string) &&
+             (data.instagramUrl == null || data.instagramUrl is string) &&
+             (data.githubUrl == null || data.githubUrl is string) &&
+             (data.discordUrl == null || data.discordUrl is string) &&
+             (data.tumblrUrl == null || data.tumblrUrl is string) &&
+             (data.blueskyUrl == null || data.blueskyUrl is string) &&
+             (data.websiteUrl == null || data.websiteUrl is string) &&
+             (data.tags == null || (data.tags is list && data.tags.size() <= 20)) &&
+             (data.createdAt == null || data.createdAt is timestamp);
     }
 
     function isValidProject(data) {
       return hasRequiredFields(['id', 'title', 'imageUrl', 'category', 'authorUid', 'authorName', 'likesCount', 'createdAt']) &&
-             hasOnlyAllowedFields(['id', 'title', 'description', 'imageUrl', 'category', 'authorUid', 'authorName', 'authorPhoto', 'likesCount', 'createdAt']) &&
+             hasOnlyAllowedFields(['id', 'title', 'description', 'imageUrl', 'category', 'tags', 'authorUid', 'authorName', 'authorPhoto', 'likesCount', 'createdAt', 'shape', 'viewCount', 'commentCount', 'isFeatured']) &&
              data.id is string && data.id.size() > 0 &&
              data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
              (data.description == null || (data.description is string && data.description.size() < 1000)) &&
              isValidUrl(data.imageUrl) &&
              data.category is string && data.category.size() > 0 &&
+             (data.tags == null || (data.tags is list && data.tags.size() <= 20)) &&
              data.authorUid is string && data.authorUid.size() > 0 &&
              data.authorName is string && data.authorName.size() > 0 && data.authorName.size() < 100 &&
-             (data.authorPhoto == null || isValidUrl(data.authorPhoto)) &&
+             (data.authorPhoto == null || data.authorPhoto == "" || isValidUrl(data.authorPhoto)) &&
              data.likesCount is number && data.likesCount >= 0 &&
+             (data.shape == null || data.shape in ['square', 'circle']) &&
+             (data.viewCount == null || data.viewCount is number) &&
+             (data.commentCount == null || data.commentCount is number) &&
              data.createdAt is timestamp;
+    }
+
+    function isValidProfile(data) {
+      return hasRequiredFields(['displayName', 'role', 'followersCount', 'followingCount']) &&
+             hasOnlyAllowedFields(['displayName', 'photoURL', 'bannerUrl', 'bio', 'role', 'createdAt', 'followersCount', 'followingCount', 'avatarShape', 'photoShape', 'handle', 'twitterUrl', 'instagramUrl', 'githubUrl', 'discordUrl', 'tumblrUrl', 'blueskyUrl', 'websiteUrl', 'tags']) &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             (data.photoURL == null || data.photoURL == "" || isValidUrl(data.photoURL)) &&
+             (data.bannerUrl == null || data.bannerUrl == "" || isValidUrl(data.bannerUrl)) &&
+             (data.bio == null || (data.bio is string && data.bio.size() < 2000)) &&
+             (data.avatarShape == null || data.avatarShape in ['square', 'circle']) &&
+             (data.photoShape == null || data.photoShape in ['square', 'circle']) &&
+             (data.handle == null || (data.handle is string && data.handle.size() < 100)) &&
+             (data.twitterUrl == null || data.twitterUrl is string) &&
+             (data.instagramUrl == null || data.instagramUrl is string) &&
+             (data.githubUrl == null || data.githubUrl is string) &&
+             (data.discordUrl == null || data.discordUrl is string) &&
+             (data.tumblrUrl == null || data.tumblrUrl is string) &&
+             (data.blueskyUrl == null || data.blueskyUrl is string) &&
+             (data.websiteUrl == null || data.websiteUrl is string) &&
+             (data.tags == null || (data.tags is list && data.tags.size() <= 20)) &&
+             data.role in ['user', 'admin'] &&
+             (data.createdAt == null || data.createdAt is timestamp) &&
+             data.followersCount is number && data.followersCount >= 0 &&
+             data.followingCount is number && data.followingCount >= 0;
     }
 
     function isValidLike(data) {
@@ -108,6 +162,14 @@ service cloud.firestore {
              hasOnlyAllowedFields(['userId', 'projectId', 'createdAt']) &&
              data.userId is string && data.userId == request.auth.uid &&
              data.projectId is string && data.projectId.size() > 0 &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidFollow(data) {
+      return hasRequiredFields(['followerId', 'followingId', 'createdAt']) &&
+             hasOnlyAllowedFields(['followerId', 'followingId', 'createdAt']) &&
+             data.followerId is string && data.followerId == request.auth.uid &&
+             data.followingId is string && data.followingId.size() > 0 && data.followingId.size() < 100 &&
              data.createdAt is timestamp;
     }
 
@@ -123,9 +185,44 @@ service cloud.firestore {
                       (request.resource.data.role == 'user' || isAdmin());
       
       allow update: if isOwner(userId) && isValidUser(request.resource.data) && 
-                      (request.resource.data.role == resource.data.role || isAdmin()) &&
-                      request.resource.data.uid == resource.data.uid &&
-                      request.resource.data.createdAt == resource.data.createdAt;
+                      (!('role' in resource.data) || request.resource.data.role == resource.data.role || isAdmin()) &&
+                      (!('uid' in resource.data) || request.resource.data.uid == resource.data.uid) &&
+                      (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt || request.resource.data.createdAt == request.time);
+    }
+
+    match /profiles/{userId} {
+      // Public profiles: Anyone can read
+      allow read: if true;
+      
+      allow create: if isOwner(userId) && isValidProfile(request.resource.data);
+
+      allow update: if isAuthenticated() && (
+                      // Owner can update their profile (except counts)
+                      (isOwner(userId) && isValidProfile(request.resource.data) &&
+                       request.resource.data.followersCount == resource.data.followersCount &&
+                       request.resource.data.followingCount == resource.data.followingCount) ||
+                      // Anyone can update followersCount via atomic increment
+                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount']) &&
+                       math.abs(request.resource.data.followersCount - resource.data.followersCount) == 1 &&
+                       // Verify consistency with follow document
+                       ((request.resource.data.followersCount > resource.data.followersCount &&
+                         !exists(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + userId)) &&
+                         getAfter(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + userId)) != null) ||
+                        (request.resource.data.followersCount < resource.data.followersCount &&
+                         exists(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + userId)) &&
+                         getAfter(/databases/$(database)/documents/follows/$(request.auth.uid + '_' + userId)) == null))) ||
+                      // Anyone can update followingCount via atomic increment (if they are the owner)
+                      (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followingCount']) &&
+                       math.abs(request.resource.data.followingCount - resource.data.followingCount) == 1)
+                    ) || isAdmin();
+    }
+
+    match /follows/{followId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidFollow(request.resource.data) && 
+                      followId == (request.auth.uid + '_' + request.resource.data.followingId);
+      allow delete: if isAuthenticated() && 
+                      (request.auth.uid == resource.data.followerId || isAdmin());
     }
 
     match /projects/{projectId} {

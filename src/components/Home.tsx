@@ -1,15 +1,20 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { MOCK_PROJECTS, CURATED_TAGS, MOCK_ARTISTS } from '../constants';
 import { ProjectCard, Tag } from './ProjectCard';
-import { Search, Filter, TrendingUp, Clock, Star, Loader2 } from 'lucide-react';
+import { Search, Filter, TrendingUp, Clock, Star, Loader2, PlusCircle } from 'lucide-react';
 import { ManiculeBadge } from './ManiculeBadge';
 import { cn } from '../lib/utils';
 import { db, collection, onSnapshot, query, orderBy, limit } from '../firebase';
 import { ProjectFolder } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { LoginModal } from './LoginModal';
 
 export const Home: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [isLoginOpen, setIsLoginOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [activeTag, setActiveTag] = React.useState<string | null>(null);
   const [projects, setProjects] = React.useState<ProjectFolder[]>([]);
@@ -18,7 +23,7 @@ export const Home: React.FC = () => {
 
   React.useEffect(() => {
     const projectsQuery = query(collection(db, 'projects'), orderBy('createdAt', 'desc'), limit(50));
-    const artistsQuery = query(collection(db, 'users'), limit(12));
+    const artistsQuery = query(collection(db, 'profiles'), limit(12));
     
     const unsubscribeProjects = onSnapshot(projectsQuery, (snapshot) => {
       const projectsData = snapshot.docs.map(doc => ({
@@ -70,7 +75,7 @@ export const Home: React.FC = () => {
                 <div className="w-12 h-12 md:w-28 md:h-28 flex items-center justify-center">
                   <img 
                     src="/logo.svg" 
-                    alt="Manus Logo" 
+                    alt="MANUS Logo" 
                     className="w-full h-full object-contain"
                     onError={(e) => {
                       e.currentTarget.style.display = 'none';
@@ -85,14 +90,24 @@ export const Home: React.FC = () => {
                   MANUS
                 </h1>
               </div>
-              <h2 className="text-lg md:text-4xl font-display font-black text-manus-orange tracking-widest uppercase">
+              <h2 className="text-lg md:text-4xl font-sans font-bold text-manus-orange tracking-widest uppercase">
                 Build. Share. Connect.
               </h2>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
-              <button className="w-full sm:w-auto bg-manus-orange text-manus-white font-black px-12 py-5 rounded-full text-lg hover:scale-105 transition-all shadow-2xl shadow-manus-orange/30 uppercase tracking-widest">
-                START YOUR GALLERY
+              <button 
+                onClick={() => {
+                  if (user) {
+                    navigate('/gallery');
+                  } else {
+                    setIsLoginOpen(true);
+                  }
+                }}
+                className="w-full sm:w-auto bg-manus-orange text-manus-white font-black px-12 py-5 rounded-full text-lg hover:scale-105 transition-all shadow-2xl shadow-manus-orange/30 uppercase tracking-widest flex items-center justify-center gap-3"
+              >
+                <PlusCircle className="w-6 h-6" />
+                START YOUR ARCHIVE
               </button>
               <button 
                 onClick={() => document.getElementById('gallery-start')?.scrollIntoView({ behavior: 'smooth' })}
@@ -104,6 +119,11 @@ export const Home: React.FC = () => {
           </motion.div>
         </div>
       </div>
+
+      <LoginModal 
+        isOpen={isLoginOpen} 
+        onClose={() => setIsLoginOpen(false)} 
+      />
 
       {/* Filter Bar */}
       <div id="gallery-start" className="sticky top-[72px] z-40 bg-manus-dark/90 backdrop-blur-xl border-y border-manus-white/10 py-4 px-6 mb-12">
@@ -154,7 +174,7 @@ export const Home: React.FC = () => {
           <button
             onClick={() => setActiveTag(null)}
             className={cn(
-              "text-[10px] font-black uppercase tracking-[0.2em] transition-all relative py-2",
+              "text-xs font-black uppercase tracking-[0.2em] transition-all relative py-2",
               !activeTag 
                 ? "text-manus-white after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-manus-orange" 
                 : "text-manus-white/40 hover:text-manus-white"
@@ -167,7 +187,7 @@ export const Home: React.FC = () => {
               key={tag}
               onClick={() => setActiveTag(tag === activeTag ? null : tag)}
               className={cn(
-                "text-[10px] font-black uppercase tracking-[0.2em] transition-all relative py-2",
+                "text-xs font-black uppercase tracking-[0.2em] transition-all relative py-2",
                 tag === activeTag 
                   ? "text-manus-white after:absolute after:bottom-0 after:left-0 after:w-full after:h-0.5 after:bg-manus-orange" 
                   : "text-manus-white/40 hover:text-manus-white"
@@ -185,11 +205,11 @@ export const Home: React.FC = () => {
               <div className="flex items-center gap-4">
                 <h2 className="text-2xl font-display font-black text-manus-white uppercase tracking-widest">NEW</h2>
                 <div className="h-px w-12 bg-manus-white/10" />
-                <span className="text-[8px] font-mono text-manus-white/20 uppercase tracking-[0.3em]">LATEST_UPLOADS</span>
+                <span className="text-xs font-mono text-manus-white/20 uppercase tracking-[0.3em]">LATEST_UPLOADS</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 bg-manus-orange rounded-full animate-pulse" />
-                <span className="text-[9px] font-mono font-bold text-manus-white/40 uppercase tracking-widest">LIVE_FEED</span>
+                <span className="text-xs font-mono font-bold text-manus-white/40 uppercase tracking-widest">LIVE_FEED</span>
               </div>
             </div>
             {loading ? (
@@ -199,27 +219,32 @@ export const Home: React.FC = () => {
             ) : projects.length > 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {projects.slice(0, 6).map(project => (
-                  <Link
+                  <div
                     key={project.id}
-                    to={`/project/${project.id}`}
                     className="group relative aspect-square rounded-2xl overflow-hidden bg-manus-white/5 border border-manus-white/10 hover:border-manus-cyan/50 transition-all"
                   >
-                    <img
-                      src={project.imageUrl}
-                      alt={project.title}
-                      className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-700"
-                      referrerPolicy="no-referrer"
-                    />
+                    <Link to={`/project/${project.id}`} className="absolute inset-0 z-0">
+                      <img
+                        src={project.imageUrl}
+                        alt={project.title}
+                        className="w-full h-full object-cover grayscale group-hover:grayscale-0 group-hover:scale-110 transition-all duration-700"
+                        referrerPolicy="no-referrer"
+                      />
+                    </Link>
                     {project.hasManicule && (
-                      <div className="absolute top-2 right-2 z-10">
+                      <div className="absolute top-2 right-2 z-10 pointer-events-none">
                         <ManiculeBadge size="sm" />
                       </div>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-manus-dark/90 via-manus-dark/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                      <p className="text-[10px] font-display font-black text-manus-white truncate uppercase tracking-tight mb-0.5">{project.title}</p>
-                      <p className="text-[8px] font-mono font-bold text-manus-cyan uppercase tracking-widest">@{project.authorName.split(' ')[0].toUpperCase()}</p>
+                    <div className="absolute inset-0 bg-gradient-to-t from-manus-dark/90 via-manus-dark/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4 pointer-events-none">
+                      <Link to={`/project/${project.id}`} className="pointer-events-auto">
+                        <p className="text-xs font-display font-black text-manus-white truncate uppercase tracking-tight mb-0.5">{project.title}</p>
+                      </Link>
+                      <Link to={`/artist/${project.authorUid}`} className="pointer-events-auto hover:text-manus-white transition-colors">
+                        <p className="text-xs font-mono font-bold text-manus-cyan uppercase tracking-widest">@{project.authorName.split(' ')[0].toUpperCase()}</p>
+                      </Link>
                     </div>
-                  </Link>
+                  </div>
                 ))}
               </div>
             ) : (
@@ -239,11 +264,11 @@ export const Home: React.FC = () => {
               <div className="flex items-center gap-4">
                 <h2 className="text-2xl font-display font-black text-manus-white uppercase tracking-widest">FEATURED</h2>
                 <div className="h-px w-12 bg-manus-white/10" />
-                <span className="text-[8px] font-mono text-manus-white/20 uppercase tracking-[0.3em]">CURATED_SELECTION</span>
+                <span className="text-xs font-mono text-manus-white/20 uppercase tracking-[0.3em]">CURATED_SELECTION</span>
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 bg-manus-cyan rounded-full animate-pulse" />
-                <span className="text-[9px] font-mono font-bold text-manus-white/40 uppercase tracking-widest">VERIFIED_ONLY</span>
+                <span className="text-xs font-mono font-bold text-manus-white/40 uppercase tracking-widest">VERIFIED_ONLY</span>
               </div>
             </div>
             {loading ? (
@@ -270,8 +295,8 @@ export const Home: React.FC = () => {
                       </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-t from-manus-dark/90 via-manus-dark/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                      <p className="text-[10px] font-display font-black text-manus-white truncate uppercase tracking-tight mb-0.5">{artist.displayName}</p>
-                      <p className="text-[8px] font-mono font-bold text-manus-cyan uppercase tracking-widest">@{artist.displayName?.split(' ')[0].toUpperCase()}</p>
+                      <p className="text-xs font-display font-black text-manus-white truncate uppercase tracking-tight mb-0.5">{artist.displayName}</p>
+                      <p className="text-xs font-mono font-bold text-manus-cyan uppercase tracking-widest">@{artist.displayName?.split(' ')[0].toUpperCase()}</p>
                     </div>
                   </Link>
                 ))}

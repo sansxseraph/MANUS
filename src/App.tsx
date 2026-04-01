@@ -5,7 +5,9 @@ import { Navbar } from './components/Navbar';
 import { Home } from './components/Home';
 import { Artists } from './components/Artists';
 import { ArtistProfile } from './components/ArtistProfile';
+import { UserGallery } from './components/UserGallery';
 import { ProjectView } from './components/ProjectView';
+import { NotFound } from './components/NotFound';
 import { AuthProvider } from './context/AuthContext';
 
 export default function App() {
@@ -18,10 +20,14 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/explore" element={<Home />} />
+              <Route path="/curated" element={<Home />} />
               <Route path="/artists" element={<Artists />} />
               <Route path="/artist/:artistId" element={<ArtistProfile />} />
+              <Route path="/gallery/:artistId" element={<UserGallery />} />
+              <Route path="/gallery" element={<UserGallery />} />
               <Route path="/project/:projectId" element={<ProjectView />} />
               <Route path="/profile" element={<ArtistProfile />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </main>
 
@@ -32,7 +38,7 @@ export default function App() {
                 <div className="w-7 h-7 flex items-center justify-center">
                   <img 
                     src="/logo.svg" 
-                    alt="Manus Logo" 
+                    alt="MANUS Logo" 
                     className="w-full h-full object-contain"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
@@ -43,7 +49,7 @@ export default function App() {
                   }}
                   />
                 </div>
-                <span className="font-display font-black text-xl tracking-tighter text-manus-white leading-none">MANUS</span>
+                <span className="font-display font-black text-xl tracking-tighter text-manus-white leading-none uppercase">MANUS</span>
               </div>
               <p className="text-manus-white/40 text-sm font-medium max-w-xs text-center md:text-left">
                 A non-algorithmic sanctuary for creators. Build your space, share your process, and connect with the community.
