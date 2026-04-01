@@ -24,14 +24,78 @@ import {
   Link as LinkIcon,
   Image as ImageIcon,
   Maximize2,
-  AlertCircle
+  AlertCircle,
+  User,
+  Send,
+  Lock
 } from 'lucide-react';
 import { ManiculeBadge } from './ManiculeBadge';
 import { ConfirmModal } from './ConfirmModal';
-import { db, doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc, deleteDoc, handleFirestoreError, OperationType, setDoc, increment, storage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, serverTimestamp, onSnapshot } from '../firebase';
+import { db, doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc, deleteDoc, handleFirestoreError, OperationType, setDoc, increment, storage, ref, uploadBytes, uploadBytesResumable, uploadString, StringFormat, getDownloadURL, serverTimestamp, onSnapshot, addDoc } from '../firebase';
 import { ProjectFolder } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { cn } from '../lib/utils';
+import { 
+  DndContext, 
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  horizontalListSortingStrategy,
+  useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+interface SortableTagProps {
+  tag: string;
+  onRemove: (tag: string) => void;
+  key?: string;
+}
+
+const SortableTag = ({ tag, onRemove }: SortableTagProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: tag });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 'auto',
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="group flex items-center gap-2 px-3 py-1 rounded-full bg-manus-cyan text-manus-dark text-[10px] font-black uppercase tracking-wider cursor-grab active:cursor-grabbing"
+    >
+      {tag}
+      <X 
+        className="w-3 h-3 cursor-pointer hover:scale-110 transition-transform pointer-events-auto" 
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove(tag);
+        }} 
+      />
+    </div>
+  );
+};
 
 export const ArtistProfile: React.FC = () => {
   const { artistId } = useParams<{ artistId: string }>();
@@ -56,6 +120,8 @@ export const ArtistProfile: React.FC = () => {
   const [editHandle, setEditHandle] = React.useState('');
   const [editAvatarShape, setEditAvatarShape] = React.useState<'square' | 'circle'>('square');
   const [editPhotoShape, setEditPhotoShape] = React.useState<'square' | 'circle'>('square');
+  const [editShowOnlineStatus, setEditShowOnlineStatus] = React.useState(true);
+  const [editOnlineStatus, setEditOnlineStatus] = React.useState<'online' | 'away' | 'offline'>('online');
   
   const [editTags, setEditTags] = React.useState<string[]>([]);
   const [error, setError] = React.useState('');
@@ -72,7 +138,26 @@ export const ArtistProfile: React.FC = () => {
   const [saving, setSaving] = React.useState(false);
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
   const [uploadingBanner, setUploadingBanner] = React.useState(false);
-  
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setEditTags((items) => {
+        const oldIndex = items.indexOf(active.id as string);
+        const newIndex = items.indexOf(over.id as string);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
+
   const avatarInputRef = React.useRef<HTMLInputElement>(null);
   const bannerInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -123,46 +208,82 @@ export const ArtistProfile: React.FC = () => {
           setEditBluesky(data.blueskyUrl || '');
           setEditWebsite(data.websiteUrl || '');
           setEditTags(data.tags || []);
+          setEditOnlineStatus(data.isOnline || 'online');
+          setEditShowOnlineStatus(data.showOnlineStatus ?? true);
         }
         
         setFollowerCount(data.followersCount || 0);
         setFollowingCount(data.followingCount || 0);
-      } else if (isOwnProfile && currentUser) {
-        // Fallback for current user if profile doesn't exist yet
-        const fallbackData = {
-          id: currentUser.uid,
-          displayName: currentUser.displayName || 'Anonymous Artist',
-          photoURL: currentUser.photoURL,
-          bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
-          role: 'user',
-          createdAt: new Date(),
-          followersCount: 0,
-          followingCount: 0,
-          avatarShape: 'square',
-          photoShape: 'square',
-          handle: `${(currentUser.displayName || 'artist').toLowerCase().replace(/\s+/g, '_')}_${currentUser.uid.slice(0, 4)}`,
-          twitterUrl: '',
-          instagramUrl: '',
-          githubUrl: '',
-          discordUrl: '',
-          tumblrUrl: '',
-          blueskyUrl: '',
-          websiteUrl: ''
-        };
-        setArtist(fallbackData);
-        if (!isEditingRef.current) {
-          setEditBio(fallbackData.bio);
-          setEditDisplayName(fallbackData.displayName);
-          setEditHandle(fallbackData.handle);
-          setEditAvatarShape('square');
-          setEditPhotoShape('square');
-          setEditTwitter('');
-          setEditInstagram('');
-          setEditGithub('');
-          setEditDiscord('');
-          setEditTumblr('');
-          setEditBluesky('');
-          setEditWebsite('');
+      } else {
+        // Try fetching from users collection as fallback
+        try {
+          const userSnap = await getDoc(doc(db, 'users', effectiveArtistId));
+          if (userSnap.exists()) {
+            const data = userSnap.data();
+            setArtist({ id: userSnap.id, ...data });
+            if (!isEditingRef.current) {
+              setEditBio(data.bio || '');
+              setEditDisplayName(data.displayName || '');
+              setEditHandle(data.handle || '');
+              setEditAvatarShape(data.avatarShape || 'square');
+              setEditPhotoShape(data.photoShape || 'square');
+              setEditTwitter(data.twitterUrl || '');
+              setEditInstagram(data.instagramUrl || '');
+              setEditGithub(data.githubUrl || '');
+              setEditDiscord(data.discordUrl || '');
+              setEditTumblr(data.tumblrUrl || '');
+              setEditBluesky(data.blueskyUrl || '');
+              setEditWebsite(data.websiteUrl || '');
+              setEditTags(data.tags || []);
+              setEditOnlineStatus(data.isOnline || 'online');
+              setEditShowOnlineStatus(data.showOnlineStatus ?? true);
+            }
+            setFollowerCount(data.followersCount || 0);
+            setFollowingCount(data.followingCount || 0);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error("Error fetching from users fallback:", err);
+        }
+
+        if (isOwnProfile && currentUser) {
+          // Fallback for current user if profile doesn't exist yet
+          const fallbackData = {
+            id: currentUser.uid,
+            displayName: currentUser.displayName || 'Anonymous Artist',
+            photoURL: currentUser.photoURL,
+            bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
+            role: 'user',
+            createdAt: new Date(),
+            followersCount: 0,
+            followingCount: 0,
+            avatarShape: 'square',
+            photoShape: 'square',
+            handle: `${(currentUser.displayName || 'artist').toLowerCase().replace(/\s+/g, '_')}_${currentUser.uid.slice(0, 4)}`,
+            twitterUrl: '',
+            instagramUrl: '',
+            githubUrl: '',
+            discordUrl: '',
+            tumblrUrl: '',
+            blueskyUrl: '',
+            websiteUrl: ''
+          };
+          setArtist(fallbackData);
+          if (!isEditingRef.current) {
+            setEditBio(fallbackData.bio);
+            setEditDisplayName(fallbackData.displayName);
+            setEditHandle(fallbackData.handle);
+            setEditAvatarShape('square');
+            setEditPhotoShape('square');
+            setEditTwitter('');
+            setEditInstagram('');
+            setEditGithub('');
+            setEditDiscord('');
+            setEditTumblr('');
+            setEditBluesky('');
+            setEditWebsite('');
+          }
         }
       }
       setLoading(false);
@@ -245,47 +366,40 @@ export const ArtistProfile: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file || !currentUser || !artist) return;
 
+    if (file.size > 5 * 1024 * 1024) {
+      setError('FILE TOO LARGE. PLEASE USE AN IMAGE UNDER 5MB.');
+      setUploadingAvatar(false);
+      return;
+    }
+
     setUploadingAvatar(true);
     setError('');
     try {
       console.log('Uploading avatar for user:', currentUser.uid, 'File:', file.name);
+      
+      // Convert to Base64 to bypass stream blocks
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      
+      const base64Data = await base64Promise;
       const storageRef = ref(storage, `avatars/${currentUser.uid}_${Date.now()}`);
       
-      const uploadTask = uploadBytesResumable(storageRef, file);
+      console.log('Starting Base64 upload for avatar...');
+      const uploadTask = uploadString(storageRef, base64Data, StringFormat.DATA_URL);
       
-      const uploadPromise = new Promise<string>((resolve, reject) => {
-        console.log('Setting up upload listeners for avatar...');
-        uploadTask.on('state_changed', 
-          (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            console.log(`Avatar upload is ${progress.toFixed(2)}% done. State: ${snapshot.state}`);
-          }, 
-          (error) => {
-            console.error('Avatar upload task error:', error);
-            reject(error);
-          }, 
-          async () => {
-            console.log('Avatar upload task completed. Getting download URL...');
-            try {
-              const url = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(url);
-            } catch (err) {
-              console.error('Error getting avatar download URL:', err);
-              reject(err);
-            }
-          }
-        );
-      });
-
       const timeoutPromise = new Promise<string>((_, reject) => 
         setTimeout(() => {
-          uploadTask.cancel();
-          reject(new Error("UPLOAD TIMEOUT: STORAGE CONNECTION HANGING"));
-        }, 40000)
+          reject(new Error("UPLOAD TIMEOUT: THE CONNECTION IS TAKING TOO LONG. PLEASE TRY A SMALLER FILE OR CHECK YOUR CONNECTION."));
+        }, 120000)
       );
 
-      const downloadURL = await Promise.race([uploadPromise, timeoutPromise]);
-      console.log('Avatar uploaded, URL:', downloadURL);
+      await Promise.race([uploadTask, timeoutPromise]);
+      const downloadURL = await getDownloadURL(storageRef);
+      console.log('Avatar uploaded via Base64, URL:', downloadURL);
 
       const profileRef = doc(db, 'profiles', currentUser.uid);
       const userRef = doc(db, 'users', currentUser.uid);
@@ -299,6 +413,8 @@ export const ArtistProfile: React.FC = () => {
         followingCount: artist.followingCount || 0,
         avatarShape: artist.avatarShape || 'square',
         photoShape: artist.photoShape || 'square',
+        showOnlineStatus: artist.showOnlineStatus ?? true,
+        isOnline: artist.isOnline || 'online',
         handle: artist.handle?.replace(/^@/, '') || `${(artist.displayName || 'artist').toLowerCase().replace(/\s+/g, '_')}_${currentUser.uid.slice(0, 4)}`,
         twitterUrl: artist.twitterUrl || '',
         instagramUrl: artist.instagramUrl || '',
@@ -329,47 +445,40 @@ export const ArtistProfile: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file || !currentUser || !artist) return;
 
+    if (file.size > 10 * 1024 * 1024) {
+      setError('BANNER TOO LARGE. PLEASE USE AN IMAGE UNDER 10MB.');
+      setUploadingBanner(false);
+      return;
+    }
+
     setUploadingBanner(true);
     setError('');
     try {
       console.log('Uploading banner for user:', currentUser.uid, 'File:', file.name);
+      
+      // Convert to Base64 to bypass stream blocks
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      
+      const base64Data = await base64Promise;
       const storageRef = ref(storage, `banners/${currentUser.uid}_${Date.now()}`);
       
-      const uploadTask = uploadBytesResumable(storageRef, file);
+      console.log('Starting Base64 upload for banner...');
+      const uploadTask = uploadString(storageRef, base64Data, StringFormat.DATA_URL);
       
-      const uploadPromise = new Promise<string>((resolve, reject) => {
-        console.log('Setting up upload listeners for banner...');
-        uploadTask.on('state_changed', 
-          (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            console.log(`Banner upload is ${progress.toFixed(2)}% done. State: ${snapshot.state}`);
-          }, 
-          (error) => {
-            console.error('Banner upload task error:', error);
-            reject(error);
-          }, 
-          async () => {
-            console.log('Banner upload task completed. Getting download URL...');
-            try {
-              const url = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(url);
-            } catch (err) {
-              console.error('Error getting banner download URL:', err);
-              reject(err);
-            }
-          }
-        );
-      });
-
       const timeoutPromise = new Promise<string>((_, reject) => 
         setTimeout(() => {
-          uploadTask.cancel();
-          reject(new Error("UPLOAD TIMEOUT: STORAGE CONNECTION HANGING"));
-        }, 40000)
+          reject(new Error("UPLOAD TIMEOUT: THE CONNECTION IS TAKING TOO LONG. PLEASE TRY A SMALLER FILE OR CHECK YOUR CONNECTION."));
+        }, 120000)
       );
 
-      const downloadURL = await Promise.race([uploadPromise, timeoutPromise]);
-      console.log('Banner uploaded, URL:', downloadURL);
+      await Promise.race([uploadTask, timeoutPromise]);
+      const downloadURL = await getDownloadURL(storageRef);
+      console.log('Banner uploaded via Base64, URL:', downloadURL);
 
       const profileRef = doc(db, 'profiles', currentUser.uid);
       const userRef = doc(db, 'users', currentUser.uid);
@@ -384,6 +493,8 @@ export const ArtistProfile: React.FC = () => {
         followingCount: artist.followingCount || 0,
         avatarShape: artist.avatarShape || 'square',
         photoShape: artist.photoShape || 'square',
+        showOnlineStatus: artist.showOnlineStatus ?? true,
+        isOnline: artist.isOnline || 'online',
         handle: artist.handle?.replace(/^@/, '') || `${(artist.displayName || 'artist').toLowerCase().replace(/\s+/g, '_')}_${currentUser.uid.slice(0, 4)}`,
         twitterUrl: artist.twitterUrl || '',
         instagramUrl: artist.instagramUrl || '',
@@ -427,6 +538,8 @@ export const ArtistProfile: React.FC = () => {
         bio: editBio,
         avatarShape: editAvatarShape,
         photoShape: editPhotoShape,
+        showOnlineStatus: editShowOnlineStatus,
+        isOnline: editOnlineStatus,
         twitterUrl: editTwitter,
         instagramUrl: editInstagram,
         githubUrl: editGithub,
@@ -455,6 +568,8 @@ export const ArtistProfile: React.FC = () => {
         bio: editBio,
         avatarShape: editAvatarShape,
         photoShape: editPhotoShape,
+        showOnlineStatus: editShowOnlineStatus,
+        isOnline: editOnlineStatus,
         twitterUrl: editTwitter,
         instagramUrl: editInstagram,
         githubUrl: editGithub,
@@ -479,6 +594,8 @@ export const ArtistProfile: React.FC = () => {
         handle: finalHandle, 
         avatarShape: editAvatarShape,
         photoShape: editPhotoShape,
+        showOnlineStatus: editShowOnlineStatus,
+        isOnline: editOnlineStatus,
         twitterUrl: editTwitter,
         instagramUrl: editInstagram,
         githubUrl: editGithub,
@@ -616,7 +733,7 @@ export const ArtistProfile: React.FC = () => {
       </div>
 
       {/* Profile Info */}
-      <div className="max-w-7xl mx-auto px-6 -mt-40 relative z-10">
+      <div className="max-w-7xl mx-auto px-6 -mt-20 lg:-mt-40 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 mb-20">
           {/* Left Column: Avatar & Stats */}
           <div className="lg:col-span-4">
@@ -667,7 +784,7 @@ export const ArtistProfile: React.FC = () => {
               </motion.div>
 
               <div className="space-y-6">
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-2 sm:gap-4">
                   <div className="text-center">
                     <div className="text-xl font-mono font-black text-manus-white">{projects.filter(p => p.isFeatured).length}</div>
                     <div className="text-[10px] font-mono text-manus-white/40 uppercase tracking-widest">FEATURED</div>
@@ -684,36 +801,61 @@ export const ArtistProfile: React.FC = () => {
 
                 <div className="pt-6 border-t border-manus-white/10 flex flex-col gap-3">
                   {isOwnProfile ? (
-                    <button 
-                      onClick={() => setIsEditing(!isEditing)}
-                      className="w-full py-3 bg-manus-white/5 border border-manus-white/10 text-manus-white font-black text-xs uppercase tracking-[0.2em] rounded-xl hover:bg-manus-white/10 transition-all flex items-center justify-center gap-2"
-                    >
-                      {isEditing ? <><X className="w-4 h-4" /> CANCEL EDITING</> : <><Edit3 className="w-4 h-4" /> EDIT PROFILE</>}
-                    </button>
+                    <>
+                      <button 
+                        onClick={() => setIsEditing(!isEditing)}
+                        className="w-full py-3 bg-manus-white/5 border border-manus-white/10 text-manus-white font-black text-xs uppercase tracking-[0.2em] rounded-xl hover:bg-manus-white/10 transition-all flex items-center justify-center gap-2"
+                      >
+                        {isEditing ? <><X className="w-4 h-4" /> CANCEL EDITING</> : <><Edit3 className="w-4 h-4" /> EDIT PROFILE</>}
+                      </button>
+                      <Link 
+                        to="/messages"
+                        className="w-full py-3 bg-manus-white/5 border border-manus-white/10 text-manus-white font-black text-xs uppercase tracking-[0.2em] rounded-xl hover:bg-manus-white/10 transition-all flex items-center justify-center gap-2"
+                      >
+                        <MessageSquare className="w-4 h-4" /> MESSAGES
+                      </Link>
+                      <Link 
+                        to={`/gallery/${effectiveArtistId}`}
+                        className="w-full py-3 bg-manus-white/5 border border-manus-white/10 text-manus-white font-black text-xs uppercase tracking-[0.2em] rounded-xl hover:bg-manus-cyan hover:text-manus-dark hover:border-manus-cyan transition-all flex items-center justify-center gap-2 group"
+                      >
+                        <Maximize2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                        VIEW ARCHIVE
+                      </Link>
+                    </>
                   ) : (
-                    <button 
-                      onClick={handleFollow}
-                      disabled={followLoading}
-                      className={cn(
-                        "w-full py-3 font-black text-xs uppercase tracking-[0.2em] rounded-xl transition-all flex items-center justify-center gap-2",
-                        isFollowing 
-                          ? "bg-manus-white/5 border border-manus-white/10 text-manus-white hover:bg-manus-white/10"
-                          : "bg-manus-cyan text-manus-dark hover:bg-manus-white"
-                      )}
-                    >
-                      {followLoading ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : isFollowing ? (
-                        <><UserMinus className="w-4 h-4" /> UNFOLLOW</>
-                      ) : (
-                        <><UserPlus className="w-4 h-4" /> FOLLOW</>
-                      )}
-                    </button>
-                  )}
-                  {!isOwnProfile && (
-                    <button className="w-full py-3 bg-manus-white/5 border border-manus-white/10 text-manus-white font-black text-xs uppercase tracking-[0.2em] rounded-xl hover:bg-manus-white/10 transition-all">
-                      SEND MESSAGE
-                    </button>
+                    <>
+                      <button 
+                        onClick={handleFollow}
+                        disabled={followLoading}
+                        className={cn(
+                          "w-full py-3 font-black text-xs uppercase tracking-[0.2em] rounded-xl transition-all flex items-center justify-center gap-2",
+                          isFollowing 
+                            ? "bg-manus-white/5 border border-manus-white/10 text-manus-white hover:bg-manus-white/10"
+                            : "bg-manus-cyan text-manus-dark hover:bg-manus-white"
+                        )}
+                      >
+                        {followLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : isFollowing ? (
+                          <><UserMinus className="w-4 h-4" /> UNFOLLOW</>
+                        ) : (
+                          <><UserPlus className="w-4 h-4" /> FOLLOW</>
+                        )}
+                      </button>
+                      <Link 
+                        to={`/messages?to=${effectiveArtistId}`}
+                        className="w-full py-3 bg-manus-white/5 border border-manus-white/10 text-manus-white font-black text-xs uppercase tracking-[0.2em] rounded-xl hover:bg-manus-white/10 transition-all flex items-center justify-center gap-2"
+                      >
+                        <Send className="w-4 h-4" /> SEND MESSAGE
+                      </Link>
+                      <Link 
+                        to={`/gallery/${effectiveArtistId}`}
+                        className="w-full py-3 bg-manus-white/5 border border-manus-white/10 text-manus-white font-black text-xs uppercase tracking-[0.2em] rounded-xl hover:bg-manus-cyan hover:text-manus-dark hover:border-manus-cyan transition-all flex items-center justify-center gap-2 group"
+                      >
+                        <Maximize2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                        VIEW ARCHIVE
+                      </Link>
+                    </>
                   )}
                 </div>
 
@@ -739,9 +881,12 @@ export const ArtistProfile: React.FC = () => {
                     </a>
                   )}
                   {artist.discordUrl && (
-                    <a href={artist.discordUrl} target="_blank" rel="noopener noreferrer">
+                    <div className="group relative flex items-center">
                       <MessageSquare className="w-5 h-5 text-manus-white/40 hover:text-manus-cyan cursor-pointer transition-colors" />
-                    </a>
+                      <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-manus-dark border border-manus-white/10 rounded text-[10px] font-mono text-manus-white opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+                        {artist.discordUrl}
+                      </span>
+                    </div>
                   )}
                   {artist.tumblrUrl && (
                     <a href={artist.tumblrUrl} target="_blank" rel="noopener noreferrer">
@@ -755,14 +900,6 @@ export const ArtistProfile: React.FC = () => {
                   )}
                   <Share2 className="w-5 h-5 text-manus-white/40 hover:text-manus-cyan cursor-pointer transition-colors" />
                 </div>
-                
-                <Link 
-                  to={`/gallery/${effectiveArtistId}`}
-                  className="w-full mt-8 py-4 bg-manus-white/5 border border-manus-white/10 text-manus-white font-black text-[10px] uppercase tracking-[0.3em] rounded-xl hover:bg-manus-cyan hover:text-manus-dark hover:border-manus-cyan transition-all flex items-center justify-center gap-3 group"
-                >
-                  <Maximize2 className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                  VIEW FULL ARCHIVE
-                </Link>
               </div>
             </div>
           </div>
@@ -978,7 +1115,7 @@ export const ArtistProfile: React.FC = () => {
                           type="text"
                           value={editDiscord}
                           onChange={(e) => setEditDiscord(e.target.value)}
-                          placeholder="Discord URL"
+                          placeholder="Discord Handle"
                           className="w-full bg-manus-white/5 border border-manus-white/10 rounded-xl pl-12 pr-4 py-3 text-xs font-mono text-manus-white focus:outline-none focus:border-manus-cyan"
                         />
                       </div>
@@ -1015,6 +1152,43 @@ export const ArtistProfile: React.FC = () => {
                     </div>
                   </div>
 
+                  <div className="flex flex-col gap-4 p-4 bg-manus-white/5 border border-manus-white/10 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <input 
+                        type="checkbox"
+                        id="showOnlineStatus"
+                        checked={editShowOnlineStatus}
+                        onChange={(e) => setEditShowOnlineStatus(e.target.checked)}
+                        className="w-4 h-4 rounded border-manus-white/10 bg-manus-dark text-manus-cyan focus:ring-manus-cyan"
+                      />
+                      <label htmlFor="showOnlineStatus" className="text-xs font-mono text-manus-white/60 uppercase tracking-widest cursor-pointer">
+                        Show Online Status Indicator
+                      </label>
+                    </div>
+                    
+                    {editShowOnlineStatus && (
+                      <div className="flex gap-2 mt-2">
+                        {(['online', 'away', 'offline'] as const).map((status) => (
+                          <button
+                            key={status}
+                            type="button"
+                            onClick={() => setEditOnlineStatus(status)}
+                            className={cn(
+                              "flex-1 py-2 rounded-lg border text-[10px] font-mono font-bold tracking-widest uppercase transition-all",
+                              editOnlineStatus === status 
+                                ? status === 'online' ? "bg-manus-cyan text-manus-dark border-manus-cyan" 
+                                  : status === 'away' ? "bg-manus-yellow text-manus-dark border-manus-yellow" 
+                                  : "bg-manus-white/20 text-manus-white border-manus-white/20"
+                                : "bg-manus-white/5 border-manus-white/10 text-manus-white/40 hover:bg-manus-white/10"
+                            )}
+                          >
+                            {status}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="flex justify-end gap-4">
                     <button 
                       onClick={() => setIsEditing(false)}
@@ -1043,29 +1217,37 @@ export const ArtistProfile: React.FC = () => {
               <div className="p-6 bg-manus-white/5 border border-manus-white/10 rounded-2xl">
                 <div className="text-sm font-mono text-manus-cyan uppercase tracking-widest mb-4">SPECIALIZATIONS</div>
                 {isEditing ? (
-                  <div className="flex flex-wrap gap-x-2 gap-y-1">
-                    {editTags.map(tag => (
-                      <span key={tag} className="flex items-center gap-2 px-3 py-1 rounded-full bg-manus-cyan text-manus-dark text-[10px] font-black uppercase tracking-wider">
-                        {tag}
-                        <X className="w-3 h-3 cursor-pointer hover:scale-110 transition-transform" onClick={() => setEditTags(prev => prev.filter(t => t !== tag))} />
-                      </span>
-                    ))}
-                    <input
-                      type="text"
-                      placeholder="ADD TAG..."
-                      className="bg-manus-white/5 border border-manus-white/10 rounded-full px-4 py-1 text-[10px] font-black text-manus-white placeholder:text-manus-white/20 focus:outline-none focus:border-manus-cyan uppercase tracking-widest"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          const val = (e.target as HTMLInputElement).value.trim();
-                          if (val && !editTags.includes(val)) {
-                            setEditTags(prev => [...prev, val]);
-                            (e.target as HTMLInputElement).value = '';
-                          }
-                        }
-                      }}
-                    />
-                  </div>
+                  <DndContext 
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext 
+                      items={editTags}
+                      strategy={horizontalListSortingStrategy}
+                    >
+                      <div className="flex flex-wrap gap-x-2 gap-y-1">
+                        {editTags.map((tag: string) => (
+                          <SortableTag key={tag} tag={tag} onRemove={(t: string) => setEditTags(prev => prev.filter(tag => tag !== t))} />
+                        ))}
+                        <input
+                          type="text"
+                          placeholder="ADD TAG..."
+                          className="bg-manus-white/5 border border-manus-white/10 rounded-full px-4 py-1 text-[10px] font-black text-manus-white placeholder:text-manus-white/20 focus:outline-none focus:border-manus-cyan uppercase tracking-widest"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const val = (e.target as HTMLInputElement).value.trim();
+                              if (val && !editTags.includes(val)) {
+                                setEditTags(prev => [...prev, val]);
+                                (e.target as HTMLInputElement).value = '';
+                              }
+                            }
+                          }}
+                        />
+                      </div>
+                    </SortableContext>
+                  </DndContext>
                 ) : (
                   <div className="flex flex-wrap gap-x-2 gap-y-1">
                     {artist.tags?.map((tag: string) => (
@@ -1076,6 +1258,7 @@ export const ArtistProfile: React.FC = () => {
                   </div>
                 )}
               </div>
+
               <div className="p-6 bg-manus-white/5 border border-manus-white/10 rounded-2xl">
                 <div className="text-sm font-mono text-manus-cyan uppercase tracking-widest mb-4">SYSTEM LOGS</div>
                 <div className="space-y-2">
@@ -1087,6 +1270,28 @@ export const ArtistProfile: React.FC = () => {
                     <span className="text-manus-white/40">LAST ACTIVE:</span>
                     <span className="text-manus-white/80">2 HOURS AGO</span>
                   </div>
+                  {artist.showOnlineStatus !== false && (
+                    <div className="flex justify-between text-sm font-mono">
+                      <span className="text-manus-white/40">ONLINE:</span>
+                      <div className="flex items-center gap-2">
+                        <div className={cn(
+                          "w-2 h-2 rounded-full",
+                          artist.isOnline === 'online' ? "bg-manus-cyan shadow-[0_0_10px_rgba(12,177,199,0.5)] animate-pulse" : 
+                          artist.isOnline === 'away' ? "bg-manus-yellow shadow-[0_0_10px_rgba(255,184,0,0.5)]" :
+                          "bg-manus-white/20"
+                        )} />
+                        <span className={cn(
+                          "text-[10px] font-black uppercase tracking-widest",
+                          artist.isOnline === 'online' ? "text-manus-cyan" : 
+                          artist.isOnline === 'away' ? "text-manus-yellow" :
+                          "text-manus-white/20"
+                        )}>
+                          {artist.isOnline === 'online' ? 'ACTIVE' : 
+                           artist.isOnline === 'away' ? 'AWAY' : 'OFFLINE'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1099,12 +1304,6 @@ export const ArtistProfile: React.FC = () => {
             <div className="flex items-center gap-4">
               <h2 className="text-3xl font-display font-black text-manus-white tracking-widest uppercase">Featured</h2>
               <div className="h-px w-24 bg-manus-white/10 hidden md:block" />
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-manus-cyan rounded-full animate-pulse" />
-              <span className="text-xs font-mono font-bold text-manus-white/40 uppercase tracking-widest">
-                {projects.filter(p => p.isFeatured).length} CURATED_POINTS
-              </span>
             </div>
           </div>
 

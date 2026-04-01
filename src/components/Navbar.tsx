@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'motion/react';
 import { Search, User, PlusCircle, MoreVertical, Hand, LogIn, LogOut } from 'lucide-react';
 import { UploadModal } from './UploadModal';
 import { LoginModal } from './LoginModal';
@@ -12,9 +13,12 @@ export const Navbar: React.FC = () => {
   const [isLoginOpen, setIsLoginOpen] = React.useState(false);
   const { user, profile } = useAuth();
 
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      setIsMobileMenuOpen(false);
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -86,7 +90,7 @@ export const Navbar: React.FC = () => {
                 </Link>
                 <button 
                   onClick={handleLogout}
-                  className="p-2 rounded-full hover:bg-manus-white/10 transition-colors text-manus-white/60 hover:text-manus-orange"
+                  className="hidden sm:block p-2 rounded-full hover:bg-manus-white/10 transition-colors text-manus-white/60 hover:text-manus-orange"
                   title="Logout"
                 >
                   <LogOut className="w-5 h-5" />
@@ -101,11 +105,39 @@ export const Navbar: React.FC = () => {
                 LOG IN
               </button>
             )}
-            <button className="md:hidden p-2 rounded-full hover:bg-manus-white/10 transition-colors">
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="md:hidden p-2 rounded-full hover:bg-manus-white/10 transition-colors"
+            >
               <MoreVertical className="w-6 h-6 text-manus-white" />
             </button>
           </div>
         </div>
+
+        {/* Mobile Menu */}
+        {isMobileMenuOpen && (
+          <motion.div 
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="md:hidden mt-4 pt-4 border-t border-manus-white/10 flex flex-col gap-4"
+          >
+            <Link to="/explore" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-medium hover:text-manus-cyan transition-colors">EXPLORE</Link>
+            <Link to="/artists" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-medium hover:text-manus-cyan transition-colors">ARTISTS</Link>
+            {user && (
+              <Link to={`/artist/${user.uid}`} onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-medium hover:text-manus-cyan transition-colors">PROFILE</Link>
+            )}
+            <Link to="/blog" onClick={() => setIsMobileMenuOpen(false)} className="text-sm font-medium hover:text-manus-cyan transition-colors">BLOG</Link>
+            {user && (
+              <button 
+                onClick={handleLogout}
+                className="flex items-center gap-2 text-sm font-medium text-manus-orange hover:opacity-80 transition-opacity"
+              >
+                <LogOut className="w-4 h-4" />
+                LOG OUT
+              </button>
+            )}
+          </motion.div>
+        )}
       </nav>
 
       <UploadModal 

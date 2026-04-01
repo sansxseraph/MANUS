@@ -19,6 +19,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let unsubscribeProfile: (() => void) | null = null;
 
+    const setOnlineStatus = async (uid: string, status: 'online' | 'away' | 'offline') => {
+      try {
+        const userRef = doc(db, 'users', uid);
+        const profileRef = doc(db, 'profiles', uid);
+        await setDoc(userRef, { isOnline: status }, { merge: true });
+        await setDoc(profileRef, { isOnline: status }, { merge: true });
+      } catch (error) {
+        console.error("Error updating online status:", error);
+      }
+    };
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUser(user);
@@ -37,6 +48,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role: 'user',
             avatarShape: 'square',
             photoShape: 'square',
+            showOnlineStatus: true,
+            isOnline: 'online',
             handle: `@${(user.displayName || 'artist').toLowerCase().replace(/\s+/g, '_')}_${user.uid.slice(0, 4)}`,
             bio: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.",
             twitterUrl: '',
@@ -61,6 +74,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             followingCount: 0,
             avatarShape: 'square',
             photoShape: 'square',
+            showOnlineStatus: true,
+            isOnline: 'online',
             handle: userData.handle,
             twitterUrl: '',
             instagramUrl: '',
@@ -72,6 +87,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           };
           await setDoc(profileRef, profileData);
         } else {
+          // Set online status for existing user
+          await setOnlineStatus(user.uid, 'online');
+
           const userData = userSnap.data();
           setIsAdmin(userData?.role === 'admin' || user.email === 'rrbeardsley@gmail.com');
           
@@ -89,6 +107,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               followingCount: userData.followingCount || 0,
               avatarShape: userData.avatarShape || 'square',
               photoShape: userData.photoShape || 'square',
+              showOnlineStatus: userData.showOnlineStatus ?? true,
+              isOnline: true,
               handle: userData.handle || `@${(userData.displayName || 'artist').toLowerCase().replace(/\s+/g, '_')}_${user.uid.slice(0, 4)}`,
               twitterUrl: userData.twitterUrl || '',
               instagramUrl: userData.instagramUrl || '',
@@ -115,6 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
 
       } else {
+        const prevUser = user;
         setUser(null);
         setProfile(null);
         setIsAdmin(false);
@@ -122,13 +143,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           unsubscribeProfile();
           unsubscribeProfile = null;
         }
+        if (prevUser) {
+          setOnlineStatus(prevUser.uid, 'offline');
+        }
         setLoading(false);
       }
     });
 
+    const handleUnload = () => {
+      if (auth.currentUser) {
+        setOnlineStatus(auth.currentUser.uid, 'offline');
+      }
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+
     return () => {
       unsubscribeAuth();
       if (unsubscribeProfile) unsubscribeProfile();
+      window.removeEventListener('beforeunload', handleUnload);
     };
   }, []);
 

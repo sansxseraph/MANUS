@@ -7,6 +7,7 @@ import { Artists } from './components/Artists';
 import { ArtistProfile } from './components/ArtistProfile';
 import { UserGallery } from './components/UserGallery';
 import { ProjectView } from './components/ProjectView';
+import { Messages } from './components/Messages';
 import { NotFound } from './components/NotFound';
 import { AuthProvider } from './context/AuthContext';
 
@@ -26,6 +27,7 @@ export default function App() {
               <Route path="/gallery/:artistId" element={<UserGallery />} />
               <Route path="/gallery" element={<UserGallery />} />
               <Route path="/project/:projectId" element={<ProjectView />} />
+              <Route path="/messages" element={<Messages />} />
               <Route path="/profile" element={<ArtistProfile />} />
               <Route path="*" element={<NotFound />} />
             </Routes>

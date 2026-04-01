@@ -14,6 +14,10 @@
         "handle": { "type": "string", "description": "The unique handle for the artist." },
         "avatarShape": { "type": "string", "enum": ["square", "circle"], "description": "The shape of the avatar." },
         "role": { "type": "string", "enum": ["user", "admin"], "description": "The role of the user." },
+        "showOnlineStatus": { "type": "boolean", "description": "Whether to show the online status." },
+        "isOnline": { "type": "string", "enum": ["online", "away", "offline"], "description": "The current online status of the user." },
+        "followersCount": { "type": "integer", "description": "Number of followers." },
+        "followingCount": { "type": "integer", "description": "Number of users followed." },
         "createdAt": { "type": "string", "format": "date-time", "description": "When the user was created." }
       },
       "required": ["uid", "displayName", "email", "createdAt"]
@@ -30,6 +34,8 @@
         "handle": { "type": "string", "description": "The unique handle for the artist." },
         "avatarShape": { "type": "string", "enum": ["square", "circle"], "description": "The shape of the avatar." },
         "role": { "type": "string", "description": "The role of the user (e.g., user, admin)." },
+        "showOnlineStatus": { "type": "boolean", "description": "Whether to show the online status." },
+        "isOnline": { "type": "string", "enum": ["online", "away", "offline"], "description": "The current online status of the user." },
         "createdAt": { "type": "string", "format": "date-time", "description": "When the user was created." },
         "followersCount": { "type": "integer", "description": "Number of followers." },
         "followingCount": { "type": "integer", "description": "Number of users followed." }
@@ -75,6 +81,22 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "When the follow occurred." }
       },
       "required": ["followerId", "followingId", "createdAt"]
+    },
+    "Message": {
+      "title": "Direct Message",
+      "description": "A message sent between two users.",
+      "type": "object",
+      "properties": {
+        "fromId": { "type": "string", "description": "The UID of the sender." },
+        "fromName": { "type": "string", "description": "The name of the sender." },
+        "fromPhoto": { "type": "string", "format": "uri", "description": "The photo of the sender." },
+        "toId": { "type": "string", "description": "The UID of the recipient." },
+        "toName": { "type": "string", "description": "The name of the recipient." },
+        "text": { "type": "string", "description": "The content of the message." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the message was sent." },
+        "read": { "type": "boolean", "description": "Whether the message has been read." }
+      },
+      "required": ["fromId", "toId", "text", "createdAt"]
     }
   },
   "firestore": {
@@ -97,6 +119,10 @@
     "/likes/{likeId}": {
       "schema": "Like",
       "description": "Likes on projects, ID is usually userId_projectId."
+    },
+    "/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Direct messages between users."
     }
   }
 }

@@ -4,7 +4,7 @@ import { X, Upload, Plus, Trash2, Image as ImageIcon, Film, Loader2 } from 'luci
 import { CURATED_TAGS } from '../constants';
 import { cn } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
-import { db, collection, addDoc, serverTimestamp, handleFirestoreError, OperationType, storage, ref, uploadBytes, uploadBytesResumable, getDownloadURL, setDoc, doc } from '../firebase';
+import { db, collection, addDoc, serverTimestamp, handleFirestoreError, OperationType, storage, ref, uploadBytes, uploadBytesResumable, uploadString, StringFormat, getDownloadURL, setDoc, doc } from '../firebase';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -87,51 +87,34 @@ export const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose }) => 
 
         try {
           console.log(`Uploading file ${i + 1}/${files.length}: ${fileData.name} (${fileData.file.size} bytes)`);
+          
+          // Convert to Base64 to bypass stream blocks
+          const reader = new FileReader();
+          const base64Promise = new Promise<string>((resolve, reject) => {
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(fileData.file);
+          });
+          
+          const base64Data = await base64Promise;
           const storageRef = ref(storage, `projects/${user.uid}/${Date.now()}_${fileData.name}`);
           
-          // Use uploadBytesResumable to track progress and handle hangs
-          console.log(`Creating upload task for ${fileData.name}...`);
-          const uploadTask = uploadBytesResumable(storageRef, fileData.file);
-          console.log(`Upload task created for ${fileData.name}.`);
+          console.log(`Starting Base64 upload for ${fileData.name}...`);
+          const uploadTask = uploadString(storageRef, base64Data, StringFormat.DATA_URL);
           
-          const uploadPromise = new Promise<string>((resolve, reject) => {
-            console.log(`Setting up listeners for ${fileData.name}...`);
-            uploadTask.on('state_changed', 
-              (snapshot) => {
-                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                console.log(`Upload ${i + 1} (${fileData.name}) is ${progress.toFixed(2)}% done. State: ${snapshot.state}`);
-                // Update progress for the current file
-                const overallProgress = ((i + (progress / 100)) / files.length) * 100;
-                setUploadProgress(overallProgress);
-              }, 
-              (error) => {
-                console.error(`Upload task error for ${fileData.name}:`, error);
-                reject(error);
-              }, 
-              async () => {
-                console.log(`Upload task completed for ${fileData.name}. Getting download URL...`);
-                try {
-                  const url = await getDownloadURL(uploadTask.snapshot.ref);
-                  console.log(`Download URL retrieved for ${fileData.name}:`, url);
-                  resolve(url);
-                } catch (urlErr) {
-                  console.error(`Error getting download URL for ${fileData.name}:`, urlErr);
-                  reject(urlErr);
-                }
-              }
-            );
-          });
-
           const timeoutPromise = new Promise<string>((_, reject) => 
             setTimeout(() => {
-              uploadTask.cancel();
               reject(new Error("UPLOAD TIMEOUT: THE CONNECTION TO FIREBASE STORAGE IS TAKING TOO LONG. PLEASE TRY A SMALLER FILE OR CHECK YOUR CONNECTION."));
             }, 60000) // Increased to 60s
           );
 
-          const url = await Promise.race([uploadPromise, timeoutPromise]);
-          console.log(`File ${i + 1} uploaded successfully:`, url);
+          await Promise.race([uploadTask, timeoutPromise]);
+          const url = await getDownloadURL(storageRef);
+          console.log(`File ${i + 1} uploaded successfully via Base64:`, url);
           uploadedUrls.push(url);
+          
+          // Update progress
+          setUploadProgress(((i + 1) / files.length) * 100);
         } catch (uploadErr) {
           console.error(`Error uploading file ${fileData.name}:`, uploadErr);
           if (uploadErr instanceof Error && uploadErr.message.includes("TIMEOUT")) {

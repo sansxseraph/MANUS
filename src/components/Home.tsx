@@ -205,11 +205,6 @@ export const Home: React.FC = () => {
               <div className="flex items-center gap-4">
                 <h2 className="text-2xl font-display font-black text-manus-white uppercase tracking-widest">NEW</h2>
                 <div className="h-px w-12 bg-manus-white/10" />
-                <span className="text-xs font-mono text-manus-white/20 uppercase tracking-[0.3em]">LATEST_UPLOADS</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 bg-manus-orange rounded-full animate-pulse" />
-                <span className="text-xs font-mono font-bold text-manus-white/40 uppercase tracking-widest">LIVE_FEED</span>
               </div>
             </div>
             {loading ? (
@@ -264,11 +259,6 @@ export const Home: React.FC = () => {
               <div className="flex items-center gap-4">
                 <h2 className="text-2xl font-display font-black text-manus-white uppercase tracking-widest">FEATURED</h2>
                 <div className="h-px w-12 bg-manus-white/10" />
-                <span className="text-xs font-mono text-manus-white/20 uppercase tracking-[0.3em]">CURATED_SELECTION</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 bg-manus-cyan rounded-full animate-pulse" />
-                <span className="text-xs font-mono font-bold text-manus-white/40 uppercase tracking-widest">VERIFIED_ONLY</span>
               </div>
             </div>
             {loading ? (

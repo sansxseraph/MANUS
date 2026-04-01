@@ -93,7 +93,7 @@ service cloud.firestore {
 
     function isValidUser(data) {
       return hasRequiredFields(['uid', 'displayName', 'email']) &&
-             hasOnlyAllowedFields(['uid', 'displayName', 'email', 'photoURL', 'bannerUrl', 'bio', 'createdAt', 'role', 'avatarShape', 'photoShape', 'handle', 'twitterUrl', 'instagramUrl', 'githubUrl', 'discordUrl', 'tumblrUrl', 'blueskyUrl', 'websiteUrl', 'tags']) &&
+             hasOnlyAllowedFields(['uid', 'displayName', 'email', 'photoURL', 'bannerUrl', 'bio', 'createdAt', 'role', 'avatarShape', 'photoShape', 'handle', 'twitterUrl', 'instagramUrl', 'githubUrl', 'discordUrl', 'tumblrUrl', 'blueskyUrl', 'websiteUrl', 'tags', 'isOnline', 'showOnlineStatus', 'followersCount', 'followingCount']) &&
              data.uid is string && data.uid.size() > 0 &&
              data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
              isValidEmail(data.email) &&
@@ -111,6 +111,10 @@ service cloud.firestore {
              (data.blueskyUrl == null || data.blueskyUrl is string) &&
              (data.websiteUrl == null || data.websiteUrl is string) &&
              (data.tags == null || (data.tags is list && data.tags.size() <= 20)) &&
+             (data.isOnline == null || data.isOnline in ['online', 'away', 'offline']) &&
+             (data.showOnlineStatus == null || data.showOnlineStatus is bool) &&
+             (data.followersCount == null || data.followersCount is number) &&
+             (data.followingCount == null || data.followingCount is number) &&
              (data.createdAt == null || data.createdAt is timestamp);
     }
 
@@ -135,7 +139,7 @@ service cloud.firestore {
 
     function isValidProfile(data) {
       return hasRequiredFields(['displayName', 'role', 'followersCount', 'followingCount']) &&
-             hasOnlyAllowedFields(['displayName', 'photoURL', 'bannerUrl', 'bio', 'role', 'createdAt', 'followersCount', 'followingCount', 'avatarShape', 'photoShape', 'handle', 'twitterUrl', 'instagramUrl', 'githubUrl', 'discordUrl', 'tumblrUrl', 'blueskyUrl', 'websiteUrl', 'tags']) &&
+             hasOnlyAllowedFields(['displayName', 'photoURL', 'bannerUrl', 'bio', 'role', 'createdAt', 'followersCount', 'followingCount', 'avatarShape', 'photoShape', 'handle', 'twitterUrl', 'instagramUrl', 'githubUrl', 'discordUrl', 'tumblrUrl', 'blueskyUrl', 'websiteUrl', 'tags', 'isOnline', 'showOnlineStatus']) &&
              data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
              (data.photoURL == null || data.photoURL == "" || isValidUrl(data.photoURL)) &&
              (data.bannerUrl == null || data.bannerUrl == "" || isValidUrl(data.bannerUrl)) &&
@@ -151,6 +155,8 @@ service cloud.firestore {
              (data.blueskyUrl == null || data.blueskyUrl is string) &&
              (data.websiteUrl == null || data.websiteUrl is string) &&
              (data.tags == null || (data.tags is list && data.tags.size() <= 20)) &&
+             (data.isOnline == null || data.isOnline in ['online', 'away', 'offline']) &&
+             (data.showOnlineStatus == null || data.showOnlineStatus is bool) &&
              data.role in ['user', 'admin'] &&
              (data.createdAt == null || data.createdAt is timestamp) &&
              data.followersCount is number && data.followersCount >= 0 &&
@@ -173,6 +179,16 @@ service cloud.firestore {
              data.createdAt is timestamp;
     }
 
+    function isValidMessage(data) {
+      return hasRequiredFields(['fromId', 'toId', 'text', 'createdAt']) &&
+             hasOnlyAllowedFields(['fromId', 'fromName', 'fromPhoto', 'toId', 'toName', 'text', 'createdAt', 'read']) &&
+             data.fromId is string && data.fromId == request.auth.uid &&
+             data.toId is string && data.toId.size() > 0 &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 5000 &&
+             data.createdAt is timestamp &&
+             (data.read == null || data.read is bool);
+    }
+
     // ===============================================================
     // Rules
     // ===============================================================
@@ -184,10 +200,14 @@ service cloud.firestore {
       allow create: if isOwner(userId) && isValidUser(request.resource.data) && 
                       (request.resource.data.role == 'user' || isAdmin());
       
-      allow update: if isOwner(userId) && isValidUser(request.resource.data) && 
-                      (!('role' in resource.data) || request.resource.data.role == resource.data.role || isAdmin()) &&
-                      (!('uid' in resource.data) || request.resource.data.uid == resource.data.uid) &&
-                      (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt || request.resource.data.createdAt == request.time);
+      allow update: if isOwner(userId) && (
+                        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isOnline']) && 
+                         request.resource.data.isOnline in ['online', 'away', 'offline']) ||
+                        (isValidUser(request.resource.data) && 
+                         (!('role' in resource.data) || request.resource.data.role == resource.data.role || isAdmin()) &&
+                         (!('uid' in resource.data) || request.resource.data.uid == resource.data.uid) &&
+                         (!('createdAt' in resource.data) || request.resource.data.createdAt == resource.data.createdAt || request.resource.data.createdAt == request.time))
+                      );
     }
 
     match /profiles/{userId} {
@@ -197,10 +217,14 @@ service cloud.firestore {
       allow create: if isOwner(userId) && isValidProfile(request.resource.data);
 
       allow update: if isAuthenticated() && (
-                      // Owner can update their profile (except counts)
-                      (isOwner(userId) && isValidProfile(request.resource.data) &&
-                       request.resource.data.followersCount == resource.data.followersCount &&
-                       request.resource.data.followingCount == resource.data.followingCount) ||
+                      // Owner can update their profile
+                      (isOwner(userId) && (
+                        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isOnline']) && 
+                         request.resource.data.isOnline in ['online', 'away', 'offline']) ||
+                        (isValidProfile(request.resource.data) &&
+                         request.resource.data.followersCount == resource.data.followersCount &&
+                         request.resource.data.followingCount == resource.data.followingCount)
+                      )) ||
                       // Anyone can update followersCount via atomic increment
                       (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount']) &&
                        math.abs(request.resource.data.followersCount - resource.data.followersCount) == 1 &&
@@ -259,6 +283,24 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidLike(request.resource.data) && 
                       likeId == (request.auth.uid + '_' + request.resource.data.projectId);
       allow delete: if isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    match /messages/{messageId} {
+      // Users can only read messages they sent or received
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.fromId || request.auth.uid == resource.data.toId || isAdmin());
+      
+      // Users can only create messages where they are the sender
+      allow create: if isAuthenticated() && isValidMessage(request.resource.data);
+      
+      // Users can only update 'read' status if they are the recipient
+      allow update: if isAuthenticated() && (
+                      (request.auth.uid == resource.data.toId && 
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])) ||
+                      isAdmin()
+                    );
+      
+      // Users can delete their own messages
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.fromId || request.auth.uid == resource.data.toId || isAdmin());
     }
   }
 }
